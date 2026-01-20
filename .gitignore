@@ -25,3 +25,11 @@ build/
 *.log
 .env
 .env.*
+
+# datasets / exports
+backend/*.csv
+backend/Datasets/
+*.csv
+
+# databases
+*.db
