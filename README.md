@@ -129,16 +129,21 @@ Foods
 GET /foods?query=rice&limit=20
 ```
 Food Logs
+```bash
 POST /food-logs
 GET /food-logs/today?user_id=1
 GET /food-logs?user_id=1&date=YYYY-MM-DD
 DELETE /food-logs/{log_id}
+```
 Reports
+```bash
 POST /reports/daily
 GET /reports/today?user_id=1 (optional / fallback used if supported)
+```
 Recommendations
+```bash
 POST /recommendations/generate
-
+```
 ## 🧪 Recommendation Engine (Baseline)
 Current recommendation system is rule-based and explainable:
 Find nutrient deficits: RDA - Intake
