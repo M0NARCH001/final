@@ -1,0 +1,27 @@
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- DB / models ---
+*.db
+*.joblib
+*.pkl
+
+# --- Datasets / exports ---
+backend/Datasets/
+backend/*.csv
+backend/**/*.csv
+
+# allow small cleaned samples if you want later
+# !backend/Datasets/sample_*.csv
+
+# --- Expo / React Native ---
+node_modules/
+.expo/
+dist/
+build/
+*.log
+.env
+.env.*
