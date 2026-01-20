@@ -123,7 +123,7 @@ Example:
 ```bash
 const DEV_MACHINE_IP = "192.168.29.117";
 ```
-📌 API Endpoints (Backend)
+## 📌 API Endpoints (Backend)
 Foods
 ```bash
 GET /foods?query=rice&limit=20
@@ -139,7 +139,7 @@ GET /reports/today?user_id=1 (optional / fallback used if supported)
 Recommendations
 POST /recommendations/generate
 
-🧪 Recommendation Engine (Baseline)
+## 🧪 Recommendation Engine (Baseline)
 Current recommendation system is rule-based and explainable:
 Find nutrient deficits: RDA - Intake
 Score foods based on how much they reduce deficits
@@ -147,14 +147,14 @@ Penalize for excess sodium/sugar
 Normalize by calories
 Return Top-K foods
 Future version will add ML ranking on user acceptance feedback.
-🖼 Screenshots
+## 🖼 Screenshots
 (Add screenshots here later)
 Home Screen
 Food Log Screen
 Report Screen
 Recommendations
-👨‍💻 Author
+## 👨💻 Author
 Veerendra Virothi
 NutriMate — Personalized AI Diet Assistant
-📜 License
+## 📜 License
 This project is built for learning / portfolio purposes.
