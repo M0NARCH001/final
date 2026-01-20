@@ -1,0 +1,105 @@
+# backend/app/models.py
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    DateTime,
+    Text,
+    ForeignKey,
+    Boolean,
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
+Base = declarative_base()
+
+
+class User(Base):
+    __tablename__ = "user"
+    user_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+    age = Column(Integer, nullable=True)
+    height_cm = Column(Float, nullable=True)
+    weight_kg = Column(Float, nullable=True)
+    target_weight_kg = Column(Float, nullable=True)
+    activity_level = Column(String, nullable=True)
+    medical_conditions = Column(Text, nullable=True)
+    diet_preferences = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class FoodItem(Base):
+    __tablename__ = "food_item"
+    food_id = Column(Integer, primary_key=True, index=True)
+    food_name = Column(String, index=True)
+    main_name = Column(String, index=True)
+    subcategories_json = Column(Text, nullable=True)
+    source = Column(String, nullable=True)
+
+    Calories_kcal = Column(Float, nullable=True)
+    Carbohydrates_g = Column(Float, nullable=True)
+    Protein_g = Column(Float, nullable=True)
+    Fats_g = Column(Float, nullable=True)
+    FreeSugar_g = Column(Float, nullable=True)
+    Fibre_g = Column(Float, nullable=True)
+    Sodium_mg = Column(Float, nullable=True)
+    Calcium_mg = Column(Float, nullable=True)
+    Iron_mg = Column(Float, nullable=True)
+    VitaminC_mg = Column(Float, nullable=True)
+    Folate_ug = Column(Float, nullable=True)
+
+
+class RDA(Base):
+    __tablename__ = "rda"
+    rda_id = Column(Integer, primary_key=True, index=True)
+    life_stage = Column(String, unique=True, nullable=False)
+
+    Calories_kcal = Column(Float, nullable=True)
+    Carbohydrates_g = Column(Float, nullable=True)
+    Protein_g = Column(Float, nullable=True)
+    Fats_g = Column(Float, nullable=True)
+    FreeSugar_g = Column(Float, nullable=True)
+    Fibre_g = Column(Float, nullable=True)
+    Sodium_mg = Column(Float, nullable=True)
+    Calcium_mg = Column(Float, nullable=True)
+    Iron_mg = Column(Float, nullable=True)
+    VitaminC_mg = Column(Float, nullable=True)
+    Folate_ug = Column(Float, nullable=True)
+
+
+class FoodLog(Base):
+    __tablename__ = "food_log"
+    log_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=True)
+    food_id = Column(Integer, ForeignKey("food_item.food_id"), nullable=False)
+    quantity = Column(Float, default=1.0)
+    unit = Column(String, nullable=True)
+    cooking_method = Column(String, nullable=True)
+    portion_g_cooked = Column(Float, nullable=True)
+    logged_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("User", backref="food_logs")
+    food = relationship("FoodItem")
+
+
+class UserGoal(Base):
+    __tablename__ = "user_goal"
+    goal_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False)
+    rda_id = Column(Integer, ForeignKey("rda.rda_id"), nullable=True)
+    nutrient_name = Column(String, nullable=False)
+    recommended_value = Column(Float, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class Recommendation(Base):
+    __tablename__ = "recommendation"
+    rec_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=True)
+    rec_text = Column(Text, nullable=False)
+    rec_type = Column(String, nullable=True)
+    rec_score = Column(Float, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())

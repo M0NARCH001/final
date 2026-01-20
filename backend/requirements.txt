@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pandas
+psycopg2-binary    # if you use Postgres; safe to have
+python-multipart
+pydantic
+gradio
+scikit-learn
+joblib
+numpy
