@@ -125,7 +125,9 @@ const DEV_MACHINE_IP = "192.168.29.117";
 ```
 📌 API Endpoints (Backend)
 Foods
+```bash
 GET /foods?query=rice&limit=20
+```
 Food Logs
 POST /food-logs
 GET /food-logs/today?user_id=1
