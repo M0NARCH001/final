@@ -1,4 +1,4 @@
-# backend/app/api/food_logs.py
+# app/api/food_logs.py
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -7,8 +7,8 @@ from datetime import datetime, date, time, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from backend.app.db.database import SessionLocal
-from backend.app.models import FoodLog, FoodItem
+from app.db.database import SessionLocal
+from app.models import FoodLog, FoodItem
 
 router = APIRouter(prefix="/food-logs", tags=["food-logs"])
 

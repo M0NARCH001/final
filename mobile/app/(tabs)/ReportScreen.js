@@ -1,37 +1,59 @@
-// mobile/app/ReportScreen.js
 import React, { useState, useCallback } from "react";
-import { View, Text, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import API from "../../src/api";
 
 export default function ReportScreen() {
   const [loading, setLoading] = useState(true);
-  const [report, setReport] = useState(null);
+  const [items, setItems] = useState([]);
+
   const [recs, setRecs] = useState([]);
   const [recsLoading, setRecsLoading] = useState(false);
+
+  // backend still uses static user 1
   const userId = 1;
 
+  // -------- Fetch daily report --------
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const rep = await API.getTodayReport(userId);
-      console.log("[Report] rep:", rep);
-      setReport(rep);
+      const rep = await API.getTodayReport(userId, "Adult Male");
+
+      const rows = Object.entries(rep?.rda_comparison || {}).map(([k, v]) => ({
+        key: k,
+        intake: Number(v?.intake || 0).toFixed(2),
+        rda: Number(v?.rda || 0).toFixed(2),
+        percent: Math.round(v?.percent || 0),
+      }));
+
+      setItems(rows);
+
+      // clear old recs when report refreshes
       setRecs([]);
     } catch (e) {
       console.warn("[Report] fetch error", e);
+      Alert.alert("Report failed", String(e?.message || e));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, []);
 
+  // refresh when tab gains focus
   useFocusEffect(
     useCallback(() => {
       fetchReport();
     }, [fetchReport])
   );
 
+  // -------- Generate recommendations --------
   const fetchRecommendations = async () => {
     setRecsLoading(true);
     try {
@@ -42,12 +64,10 @@ export default function ReportScreen() {
           food_id: l.food_id,
           quantity: l.quantity || 1,
         })),
-        life_stage: lifeStage || "Adult Male",
+        life_stage: "Adult Male",
       };
 
       const data = await API.generateRecommendations(payload);
-      console.log("[Report] recommendations:", data);
-
       setRecs(data?.recommendations || []);
     } catch (e) {
       console.warn("[Report] recommendations error", e);
@@ -57,6 +77,7 @@ export default function ReportScreen() {
     }
   };
 
+  // -------- Add recommended food to log --------
   const addRecommendedToLog = async (food) => {
     try {
       await API.addFoodLog({
@@ -65,48 +86,49 @@ export default function ReportScreen() {
         quantity: 1,
         unit: "serving",
       });
+
       Alert.alert("Added", `${food.food_name || "Food"} added to log`);
+
+      // refresh report after adding
       await fetchReport();
     } catch (e) {
       console.warn("add rec error", e);
       Alert.alert("Add failed", String(e?.message || e));
-      await fetchReport();
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchRecs();
-    }, [fetchRecs])
-  );
-
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} size="large" />;
-
-  const comparison = report?.rda_comparison || {};
-
-  const items = Object.keys(comparison).map((k) => ({
-    key: k,
-    ...comparison[k]
-  }));
+  if (loading) {
+    return <ActivityIndicator style={{ flex: 1 }} size="large" />;
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.h1}>Daily Report</Text>
+    <SafeAreaView style={{ flex: 1, padding: 16 }}>
+      <Text style={{ fontSize: 22, fontWeight: "800", marginBottom: 10 }}>
+        Daily Report
+      </Text>
 
       <FlatList
         data={items}
         keyExtractor={(i) => i.key}
         renderItem={({ item }) => (
-          <View style={styles.row}>
-            <Text style={styles.label}>{item.key.replace("_", " ")}</Text>
-            <Text style={styles.value}>
-              {item.intake} / {item.rda} ({item.percent ?? 0}%)
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              paddingVertical: 8,
+              borderBottomWidth: 0.5,
+            }}
+          >
+            <Text style={{ fontWeight: "600" }}>
+              {item.key.replace("_", " ")}
+            </Text>
+            <Text>
+              {item.intake} / {item.rda} ({item.percent}%)
             </Text>
           </View>
         )}
         ListFooterComponent={
           <View style={{ marginTop: 20 }}>
-            {/* ---------- Recommendations Button ---------- */}
             <TouchableOpacity
               onPress={fetchRecommendations}
               disabled={recsLoading}
@@ -127,10 +149,15 @@ export default function ReportScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* ---------- Recommendations List ---------- */}
             {recs.length > 0 && (
               <View style={{ marginTop: 18 }}>
-                <Text style={{ fontSize: 18, fontWeight: "800", marginBottom: 10 }}>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "800",
+                    marginBottom: 10,
+                  }}
+                >
                   Recommended Foods
                 </Text>
 
@@ -154,7 +181,6 @@ export default function ReportScreen() {
                       </Text>
                     )}
 
-                    {/* ✅ Step 4.2: Add to Log button */}
                     <TouchableOpacity
                       onPress={() => addRecommendedToLog(r)}
                       style={{
@@ -164,7 +190,13 @@ export default function ReportScreen() {
                         backgroundColor: "#34A853",
                       }}
                     >
-                      <Text style={{ color: "white", textAlign: "center", fontWeight: "700" }}>
+                      <Text
+                        style={{
+                          color: "white",
+                          textAlign: "center",
+                          fontWeight: "700",
+                        }}
+                      >
                         Add to Log
                       </Text>
                     </TouchableOpacity>
@@ -175,15 +207,6 @@ export default function ReportScreen() {
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   );
-
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
-  h1: { fontSize: 20, fontWeight: "700", marginBottom: 12 },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#eee" },
-  label: { fontSize: 16 },
-  value: { fontWeight: "700" }
-});

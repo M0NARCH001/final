@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { createUser, getUser, updateUser } from "../../src/api";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Your profile</Text>
 
       <TextInput placeholder="Name" value={name} onChangeText={setName} style={styles.input} />
@@ -56,14 +57,14 @@ export default function ProfileScreen() {
       <TouchableOpacity style={styles.btn} onPress={handleSave}>
         <Text style={styles.btnText}>Save Profile</Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex:1, padding:16 },
-  title: { fontSize:22, fontWeight:"700", marginBottom:12 },
-  input: { borderWidth:1, borderColor:"#ddd", padding:10, borderRadius:8, marginBottom:8 },
-  btn: { backgroundColor:"#1976D2", padding:12, borderRadius:8, alignItems:"center", marginTop:8 },
-  btnText: { color:"white", fontWeight:"700" }
+  container: { flex: 1, padding: 16 },
+  title: { fontSize: 22, fontWeight: "700", marginBottom: 12 },
+  input: { borderWidth: 1, borderColor: "#ddd", padding: 10, borderRadius: 8, marginBottom: 8 },
+  btn: { backgroundColor: "#1976D2", padding: 12, borderRadius: 8, alignItems: "center", marginTop: 8 },
+  btnText: { color: "white", fontWeight: "700" }
 });

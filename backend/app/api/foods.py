@@ -1,10 +1,10 @@
-# backend/app/api/foods.py
+# app/api/foods.py
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
-from backend.app.db.database import SessionLocal
-from backend.app.models import FoodItem
+from app.db.database import SessionLocal
+from app.models import FoodItem
 
 router = APIRouter(prefix="/foods", tags=["foods"])
 

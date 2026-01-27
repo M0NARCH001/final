@@ -3,7 +3,8 @@ import React, { useState, useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "@react-navigation/native"; // this works with expo-router's underlying nav
 import { useRouter } from "expo-router";
-import API from "../src/api"; // adjust if your api path is different
+import { SafeAreaView } from "react-native-safe-area-context";
+import API from "../../src/api"; // adjust if your api path is different
 
 function ProgressBar({ label, value, target }) {
   const pct = target && target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
@@ -58,7 +59,7 @@ export default function Home() {
   const comp = report?.rda_comparison || {};
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.h1}>Today's Summary</Text>
       <View style={styles.card}>
         <Text style={styles.big}>{Math.round(totals.Calories_kcal || 0)} kcal</Text>
@@ -81,7 +82,7 @@ export default function Home() {
         )}
         ListEmptyComponent={() => <Text style={{ padding: 16 }}>No logs for today.</Text>}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

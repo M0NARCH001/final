@@ -1,10 +1,10 @@
-# backend/app/api/users.py
+# app/api/users.py
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
-from backend.app.db.database import SessionLocal
-from backend.app.models import User  # import the User class directly
+from app.db.database import SessionLocal
+from app.models import User  # import the User class directly
 
 router = APIRouter(prefix="/users", tags=["users"])
 

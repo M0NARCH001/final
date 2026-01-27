@@ -8,15 +8,15 @@ from sqlalchemy import func
 import json, math, difflib, logging
 
 # DB and models
-from backend.app.db.database import SessionLocal, engine
-from backend.app.models import FoodItem, FoodLog, RDA, User  # import classes directly
+from app.db.database import SessionLocal, engine
+from app.models import FoodItem, FoodLog, RDA, User  # import classes directly
 
 # Routers
-from backend.app.api import users as users_router
-from backend.app.api import food_logs as food_logs_router
+from app.api import users as users_router
+from app.api import food_logs as food_logs_router
 
 # Create tables if they don't exist
-from backend.app.models import Base as ModelsBase
+from app.models import Base as ModelsBase
 ModelsBase.metadata.create_all(bind=engine)
 
 # FastAPI app
@@ -41,7 +41,7 @@ app.add_middleware(
 )
 
 # include routers
-from backend.app.api import foods as foods_router
+from app.api import foods as foods_router
 app.include_router(foods_router.router)
 app.include_router(users_router.router)
 app.include_router(food_logs_router.router)

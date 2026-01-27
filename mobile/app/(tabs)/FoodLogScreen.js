@@ -1,5 +1,6 @@
 // mobile/app/FoodLogScreen.js
 import React, { useState, useEffect, useCallback } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -157,7 +158,7 @@ export default function FoodLogScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Add Food Log</Text>
 
       <View style={styles.searchRow}>
@@ -253,7 +254,7 @@ export default function FoodLogScreen() {
       >
         <Text style={styles.generateBtnText}>Generate Report</Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
