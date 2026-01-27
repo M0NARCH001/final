@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models import RDA
 import os, sys
 
-DB_URL = os.environ.get("DATABASE_URL", "sqlite:///nutri.db")
+DB_URL = os.environ.get("DATABASE_URL", "sqlite:///nutri_indian.db")
 engine = create_engine(DB_URL)
 Session = sessionmaker(bind=engine)
 

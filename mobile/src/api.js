@@ -9,21 +9,17 @@ const PORT = 8000;
 
 // Android emulator must use 10.0.2.2 to reach host machine
 const ANDROID_EMULATOR_HOST = "10.0.2.2";
-
 const OPENFOOD_BASE = "https://world.openfoodfacts.org/api/v0/product";
 
-function getApiBase() {
+const API_BASE = (() => {
   // ✅ Android emulator
   if (Platform.OS === "android") {
     // In most cases Expo on Android emulator uses this.
     return `http://${ANDROID_EMULATOR_HOST}:${PORT}`;
   }
-
   // ✅ iOS simulator / physical iPhone on LAN
   return `http://${DEV_MACHINE_IP}:${PORT}`;
-}
-
-const API_BASE = getApiBase();
+})();
 
 async function request(path, opts = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;

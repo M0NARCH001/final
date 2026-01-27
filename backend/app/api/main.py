@@ -352,68 +352,117 @@ def food_logs_today(user_id: int = Query(...), db: Session = Depends(get_db)):
 # -----------------------
 # Recommendation utilities & generator
 # -----------------------
-def safe_get(food, key):
-    try:
-        v = getattr(food, key)
-        return float(v) if v is not None else 0.0
-    except Exception:
-        return 0.0
+def safe_get(food, k):
+    v = getattr(food, k, 0.0)
+    return float(v or 0.0)
+
 
 def score_food(food, deficits, user_conditions=None):
-    total_deficit = sum(v for v in deficits.values() if v > 0) or 1.0
-    contribution = 0.0
-    for k, deficit_val in deficits.items():
-        if deficit_val <= 0:
-            continue
-        amount = safe_get(food, k)
-        if amount <= 0:
-            continue
-        prop = min(1.0, amount / (deficit_val if deficit_val > 0 else 1.0))
-        weight = (deficit_val / total_deficit)
-        contribution += prop * weight
+    # weights (important for academic justification)
+    WEIGHTS = {
+        "Protein_g": 3.0,
+        "Fibre_g": 2.5,
+        "Iron_mg": 2.0,
+        "Calcium_mg": 2.0,
+        "VitaminC_mg": 2.0,
+        "Folate_ug": 2.0,
+        "Carbohydrates_g": 1.0,
+        "Calories_kcal": 0.8,
+        "Fats_g": 0.5,
+        "FreeSugar_g": -3.0,   # STRONG penalty
+        "Sodium_mg": -2.0     # penalty
+    }
 
-    raw_score = contribution
-    sugar = safe_get(food, "FreeSugar_g")
-    sodium = safe_get(food, "Sodium_mg")
-    sugar_penalty = max(0.0, (sugar - 5.0) / 10.0)
-    sodium_penalty = max(0.0, (sodium - 300.0) / 500.0)
-    penalized = raw_score - (0.5 * sugar_penalty + 0.5 * sodium_penalty)
-    cals = safe_get(food, "Calories_kcal") or 1.0
-    density_factor = (cals / 100.0) + 1.0
-    final_score = penalized / density_factor
-    return max(final_score, -1.0)
+    score = 0.0
 
-def generate_recs(db, totals, targets, user=None, max_items=5, candidate_limit=3000):
-    deficits = {k: max(0.0, targets.get(k, 0.0) - totals.get(k, 0.0)) for k in targets}
-    if all(v <= 0 for v in deficits.values()):
-        return []
-    candidates = db.query(FoodItem).limit(candidate_limit).all()
-    selected = []
-    for _ in range(max_items):
-        best = None
-        best_score = -1e9
-        for food in candidates:
-            sc = score_food(food, deficits, user_conditions=(user.medical_conditions if user else None))
-            if sc > best_score:
-                best_score = sc
-                best = food
-        if best is None or best_score <= 0:
-            break
-        servings = 1.0
-        impact = {k: safe_get(best, k) * servings for k in deficits.keys()}
-        selected.append({
-            "food_id": best.food_id,
-            "food_name": best.food_name,
-            "servings": servings,
-            "score": round(best_score, 4),
-            "estimated_impact": {k: round(v, 2) for k, v in impact.items()}
+    for k, deficit in deficits.items():
+        if deficit <= 0:
+            continue
+
+        food_val = getattr(food, k, 0.0) or 0.0
+        w = WEIGHTS.get(k, 1.0)
+
+        score += w * min(deficit, food_val)
+
+    # soft penalty for desserts / icing / candy
+    name = (food.food_name or "").lower()
+    junk_words = ["icing", "candy", "sweet", "murabba", "sugar"]
+
+    if any(j in name for j in junk_words):
+        score *= 0.3
+
+    return float(score)
+
+def generate_recs(db, totals, targets, user=None, max_items=5):
+
+    # build deficits only for valid nutrients
+    deficits = {}
+    for k, t in targets.items():
+        if t and t > 0:
+            deficits[k] = max(0.0, t - (totals.get(k, 0.0) or 0))
+
+    # fallback → protein
+    if not deficits:
+        deficits = {"Protein_g": 50}
+
+    print("DEFICITS:", deficits)
+
+    foods = db.query(FoodItem).all()
+    print("FOODS before filter:", len(foods))
+
+    # ---------------------------------------------------
+    # FILTER OUT CONDIMENTS / POWDERS / MIXES
+    # ---------------------------------------------------
+    bad_words = [
+        "powder", "masala", "chutney", "premix", "icing",
+        "seasoning", "spice", "mix", "infant"
+    ]
+
+    usable = []
+    for f in foods:
+        name = (f.food_name or "").lower()
+        if any(b in name for b in bad_words):
+            continue
+        usable.append(f)
+
+    foods = usable
+    print("FOODS after filter:", len(foods))
+
+    # ---------------------------------------------------
+
+    scored = []
+
+    for f in foods:
+        s = score_food(f, deficits)
+        if s > 0:
+            scored.append((s, f))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    results = []
+
+    for s, f in scored[:max_items]:
+        results.append({
+            "food_id": f.food_id,
+            "food_name": f.food_name,
+            "score": round(float(s), 3)
         })
-        for k in deficits:
-            deficits[k] = max(0.0, deficits[k] - impact.get(k, 0.0))
-        candidates = [c for c in candidates if c.food_id != best.food_id]
-        if sum(deficits.values()) <= 0.1:
-            break
-    return selected
+
+    # absolute fallback → high protein REAL foods
+    if not results:
+        foods = (
+            db.query(FoodItem)
+            .filter(FoodItem.Protein_g != None)
+            .order_by(FoodItem.Protein_g.desc())
+            .limit(max_items)
+            .all()
+        )
+        return [{"food_id": f.food_id, "food_name": f.food_name, "score": f.Protein_g or 0} for f in foods]
+    
+    results = list({r["food_id"]: r for r in results}.values())
+    return results
+
+
 
 @app.post("/recommendations/generate")
 def recommendations_generate(req: RecommendationRequest, db: Session = Depends(get_db)):

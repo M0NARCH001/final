@@ -1,4 +1,3 @@
-# backend/app/models.py
 from sqlalchemy import (
     Column,
     Integer,
@@ -7,17 +6,17 @@ from sqlalchemy import (
     DateTime,
     Text,
     ForeignKey,
-    Boolean,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
 
 
+# ---------------- Users ----------------
 class User(Base):
     __tablename__ = "user"
+
     user_id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=True)
     gender = Column(String, nullable=True)
@@ -31,8 +30,10 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+# ---------------- Food Items ----------------
 class FoodItem(Base):
-    __tablename__ = "food_item"
+    __tablename__ = "food_items"
+
     food_id = Column(Integer, primary_key=True, index=True)
     food_name = Column(String, index=True)
     main_name = Column(String, index=True)
@@ -52,8 +53,10 @@ class FoodItem(Base):
     Folate_ug = Column(Float, nullable=True)
 
 
+# ---------------- RDA ----------------
 class RDA(Base):
     __tablename__ = "rda"
+
     rda_id = Column(Integer, primary_key=True, index=True)
     life_stage = Column(String, unique=True, nullable=False)
 
@@ -70,33 +73,40 @@ class RDA(Base):
     Folate_ug = Column(Float, nullable=True)
 
 
+# ---------------- Food Logs ----------------
 class FoodLog(Base):
     __tablename__ = "food_log"
+
     log_id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("user.user_id"), nullable=True)
-    food_id = Column(Integer, ForeignKey("food_item.food_id"), nullable=False)
+
+    # IMPORTANT: points to food_items
+    food_id = Column(Integer, ForeignKey("food_items.food_id"), nullable=False)
+
     quantity = Column(Float, default=1.0)
     unit = Column(String, nullable=True)
     cooking_method = Column(String, nullable=True)
     portion_g_cooked = Column(Float, nullable=True)
     logged_at = Column(DateTime, server_default=func.now())
 
-    user = relationship("User", backref="food_logs")
-    food = relationship("FoodItem")
 
-
+# ---------------- User Goals ----------------
 class UserGoal(Base):
     __tablename__ = "user_goal"
+
     goal_id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False)
     rda_id = Column(Integer, ForeignKey("rda.rda_id"), nullable=True)
+
     nutrient_name = Column(String, nullable=False)
     recommended_value = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
 
+# ---------------- Recommendations ----------------
 class Recommendation(Base):
     __tablename__ = "recommendation"
+
     rec_id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("user.user_id"), nullable=True)
     rec_text = Column(Text, nullable=False)
