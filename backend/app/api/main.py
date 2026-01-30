@@ -6,6 +6,10 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import json, math, difflib, logging
+from app.api.auth import router as auth_router
+from app.api.plan import router as plan_router
+from app.api.goals import router as goals_router
+from pydantic import BaseModel
 
 # DB and models
 from app.db.database import SessionLocal, engine
@@ -19,8 +23,21 @@ from app.api import food_logs as food_logs_router
 from app.models import Base as ModelsBase
 ModelsBase.metadata.create_all(bind=engine)
 
+class ComputeRequest(BaseModel):
+    age: int
+    gender: str
+    height_cm: float
+    weight_kg: float
+    activity_level: str
+    goal: str
+    target_weight: float | None = None
+    days: int | None = None
+
 # FastAPI app
 app = FastAPI(title="NutriMate API (dev)")
+app.include_router(auth_router)
+app.include_router(plan_router)
+app.include_router(goals_router)
 logger = logging.getLogger("nutrimate")
 
 # CORS - dev-friendly
@@ -72,10 +89,11 @@ class ReportRequest(BaseModel):
     life_stage: Optional[str] = "Adult Male"
 
 class RecommendationRequest(BaseModel):
-    user_id: Optional[int] = None
-    food_logs: Optional[List[FoodLogIn]] = None
-    life_stage: Optional[str] = "Adult Male"
-    strategy: Optional[str] = "greedy"
+    food_logs: list = []
+    daily_calories: float | None = None
+    protein_g: float | None = None
+    fat_g: float | None = None
+    carbs_g: float | None = None
 
 # -----------------------
 # Nutrient keys
@@ -326,28 +344,31 @@ def report_today(user_id: Optional[int] = Query(None), db: Session = Depends(get
     return {"date": str(date.today()), "totals": totals, "rda_comparison": comp}
 
 @app.get("/food-logs/today")
-def food_logs_today(user_id: int = Query(...), db: Session = Depends(get_db)):
-    """
-    Return today's food logs for the user with expanded food info.
-    """
-    rows = db.query(FoodLog).filter(
-        FoodLog.user_id == user_id,
-        func.date(FoodLog.logged_at) == date.today()
-    ).order_by(FoodLog.logged_at.desc()).all()
+def get_today_logs(user_id: int, db: Session = Depends(get_db)):
+    logs = (
+        db.query(FoodLog, FoodItem)
+        .join(FoodItem, FoodItem.food_id == FoodLog.food_id)
+        .filter(FoodLog.user_id == user_id)
+        .all()
+    )
 
-    out = []
-    for r in rows:
-        f = db.query(FoodItem).filter(FoodItem.food_id == r.food_id).first()
-        out.append({
-            "log_id": r.log_id,
-            "food_id": r.food_id,
-            "food_name": f.food_name if f else None,
-            "quantity": r.quantity,
-            "unit": r.unit,
-            "calories": round((f.Calories_kcal or 0.0) * (r.quantity or 1.0), 2) if f else None,
-            "logged_at": r.logged_at.isoformat()
+    results = []
+
+    for log, food in logs:
+        qty = log.quantity or 1
+
+        results.append({
+            "log_id": log.log_id,
+            "food_id": food.food_id,
+            "food_name": food.food_name,
+            "quantity": qty,
+            "Calories_kcal": round((food.Calories_kcal or 0) * qty, 2),
+            "Protein_g": round((food.Protein_g or 0) * qty, 2),
+            "Carbohydrates_g": round((food.Carbohydrates_g or 0) * qty, 2),
+            "Fats_g": round((food.Fats_g or 0) * qty, 2),
         })
-    return out
+
+    return results
 
 # -----------------------
 # Recommendation utilities & generator
@@ -356,138 +377,183 @@ def safe_get(food, k):
     v = getattr(food, k, 0.0)
     return float(v or 0.0)
 
+def score_food(f, deficits):
+    kcal = f.Calories_kcal or 0
+    protein = f.Protein_g or 0
+    fat = f.Fats_g or 0
+    carbs = f.Carbohydrates_g or 0
+    # clamp negative deficits to zero
+    d_cal = max(deficits.get("Calories_kcal", 0), 0)
+    d_pro = max(deficits.get("Protein_g", 0), 0)
+    d_car = max(deficits.get("Carbohydrates_g", 0), 0)
+    d_fat = max(deficits.get("Fats_g", 0), 0)
+    score = 0
 
-def score_food(food, deficits, user_conditions=None):
-    # weights (important for academic justification)
-    WEIGHTS = {
-        "Protein_g": 3.0,
-        "Fibre_g": 2.5,
-        "Iron_mg": 2.0,
-        "Calcium_mg": 2.0,
-        "VitaminC_mg": 2.0,
-        "Folate_ug": 2.0,
-        "Carbohydrates_g": 1.0,
-        "Calories_kcal": 0.8,
-        "Fats_g": 0.5,
-        "FreeSugar_g": -3.0,   # STRONG penalty
-        "Sodium_mg": -2.0     # penalty
-    }
+    # calories small weight
+    score += min(kcal, d_cal) * 0.2
 
-    score = 0.0
+    # protein is king
+    score += min(protein, d_pro) * 4
 
-    for k, deficit in deficits.items():
-        if deficit <= 0:
-            continue
+    # carbs moderate
+    score += min(carbs, d_car) * 1
 
-        food_val = getattr(food, k, 0.0) or 0.0
-        w = WEIGHTS.get(k, 1.0)
+    # fats low
+    score += min(fat, d_fat) * 0.5
 
-        score += w * min(deficit, food_val)
+    if fat > 20:
+        score -= fat * 2
 
-    # soft penalty for desserts / icing / candy
-    name = (food.food_name or "").lower()
-    junk_words = ["icing", "candy", "sweet", "murabba", "sugar"]
-
+    name = (f.food_name or "").lower()
+    # hard penalty for sweets / desserts
+    junk_words = ["burfi", "laddu", "halwa", "icing", "cake", "sweet", "pudding", "pastry", "cookie"]
     if any(j in name for j in junk_words):
-        score *= 0.3
+        score -= 80
 
-    return float(score)
+    preferred = ["paneer","egg","dal","chicken","curd","rice","roti","channa"]
+    if any(p in name for p in preferred):
+        score += 20
+
+    return score
+
 
 def generate_recs(db, totals, targets, user=None, max_items=5):
 
-    # build deficits only for valid nutrients
-    deficits = {}
-    for k, t in targets.items():
-        if t and t > 0:
-            deficits[k] = max(0.0, t - (totals.get(k, 0.0) or 0))
+    # targets now come directly from compute endpoint
+    # expected keys:
+    # Calories_kcal, Protein_g, Fats_g, Carbohydrates_g
 
-    # fallback → protein
-    if not deficits:
-        deficits = {"Protein_g": 50}
+    deficits = {
+        "Calories_kcal": max(0, targets["Calories_kcal"] - totals.get("Calories_kcal", 0)),
+        "Protein_g": max(0, targets["Protein_g"] - totals.get("Protein_g", 0)),
+        "Fats_g": max(0, targets["Fats_g"] - totals.get("Fats_g", 0)),
+        "Carbohydrates_g": max(0, targets["Carbohydrates_g"] - totals.get("Carbohydrates_g", 0)),
+    }
 
     print("DEFICITS:", deficits)
 
     foods = db.query(FoodItem).all()
-    print("FOODS before filter:", len(foods))
 
-    # ---------------------------------------------------
-    # FILTER OUT CONDIMENTS / POWDERS / MIXES
-    # ---------------------------------------------------
-    bad_words = [
-        "powder", "masala", "chutney", "premix", "icing",
-        "seasoning", "spice", "mix", "infant"
-    ]
+    # ---- basic junk filter ----
+    clean = []
 
-    usable = []
     for f in foods:
-        name = (f.food_name or "").lower()
-        if any(b in name for b in bad_words):
+        kcal = f.Calories_kcal or 0
+        protein = f.Protein_g or 0
+        fat = f.Fats_g or 0
+        carbs = f.Carbohydrates_g or 0
+
+    # remove ultra-empty + sugar bombs
+        # remove ultra-empty
+        if kcal < 40:
             continue
-        usable.append(f)
 
-    foods = usable
-    print("FOODS after filter:", len(foods))
+        # remove sugar bombs
+        if carbs > 40 and protein < 5:
+            continue
 
-    # ---------------------------------------------------
+        # remove pure fat junk
+        if fat > 20 and protein < 5:
+            continue
+
+        clean.append(f)
+
+    foods = clean
 
     scored = []
 
     for f in foods:
-        s = score_food(f, deficits)
-        if s > 0:
-            scored.append((s, f))
+        score = score_food(f, deficits)
+        if score > 0:
+            scored.append((score, f))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
     results = []
-
     for s, f in scored[:max_items]:
         results.append({
             "food_id": f.food_id,
             "food_name": f.food_name,
-            "score": round(float(s), 3)
+            "score": round(float(s), 2)
         })
 
-    # absolute fallback → high protein REAL foods
-    if not results:
-        foods = (
-            db.query(FoodItem)
-            .filter(FoodItem.Protein_g != None)
-            .order_by(FoodItem.Protein_g.desc())
-            .limit(max_items)
-            .all()
-        )
-        return [{"food_id": f.food_id, "food_name": f.food_name, "score": f.Protein_g or 0} for f in foods]
-    
-    results = list({r["food_id"]: r for r in results}.values())
     return results
-
-
 
 @app.post("/recommendations/generate")
 def recommendations_generate(req: RecommendationRequest, db: Session = Depends(get_db)):
+
     logs = []
-    if req.food_logs:
-        for fl in req.food_logs:
-            logs.append({"food_id": fl.food_id, "quantity": fl.quantity})
+    for fl in req.food_logs:
+        logs.append({
+            "food_id": fl["food_id"],
+            "quantity": fl.get("quantity", 1)
+        })
 
     totals = compute_totals_from_logs(db, logs)
 
-    rda_row, method, matched = find_rda_row(db, req.life_stage)
-    if not rda_row:
-        return {"totals": totals, "targets": {}, "recommendations": []}
+    targets = {
+        "Calories_kcal": req.daily_calories or 0,
+        "Protein_g": req.protein_g or 0,
+        "Fats_g": req.fat_g or 0,
+        "Carbohydrates_g": req.carbs_g or 0,
+    }
 
-    targets = rda_row_to_dict(rda_row)
-
-    # load user if provided (to pass medical conditions etc.)
-    user_obj = None
-    if req.user_id:
-        user_obj = db.query(User).filter(User.user_id == req.user_id).first()
-
-    recs = generate_recs(db, totals, targets, user=user_obj, max_items=5)
+    recs = generate_recs(db, totals, targets, max_items=5)
 
     return {
         "totals": totals,
         "targets": targets,
         "recommendations": recs
+    }
+
+
+app.include_router(auth_router)
+
+@app.post("/compute")
+def compute_targets(req: ComputeRequest):
+
+    # --- BMR (Mifflin St Jeor) ---
+    if req.gender.lower() == "male":
+        bmr = 10 * req.weight_kg + 6.25 * req.height_cm - 5 * req.age + 5
+    else:
+        bmr = 10 * req.weight_kg + 6.25 * req.height_cm - 5 * req.age - 161
+
+    # --- Activity multiplier ---
+    activity_map = {
+        "Low": 1.2,
+        "Moderate": 1.55,
+        "High": 1.75,
+    }
+
+    multiplier = activity_map.get(req.activity_level, 1.55)
+    tdee = bmr * multiplier
+
+    daily_calories = tdee
+
+    # --- Goal adjustments ---
+    if req.goal == "Weight Loss" and req.target_weight:
+        diff = req.weight_kg - req.target_weight
+        total_deficit = diff * 7700
+        daily_calories = tdee - (total_deficit / max(req.days or 60, 30))
+
+    if req.goal == "Weight Gain" and req.target_weight:
+        diff = req.target_weight - req.weight_kg
+        total_surplus = diff * 7700
+        daily_calories = tdee + (total_surplus / max(req.days or 60, 30))
+
+    # --- Safety clamps ---
+    daily_calories = max(1200, daily_calories)
+
+    # --- Macros ---
+    protein_g = req.weight_kg * (2 if req.goal == "Weight Gain" else 1.6)
+    fat_g = (daily_calories * 0.25) / 9
+    carbs_g = (daily_calories - protein_g * 4 - fat_g * 9) / 4
+
+    return {
+        "bmr": round(bmr),
+        "tdee": round(tdee),
+        "daily_calories": round(daily_calories),
+        "protein_g": round(protein_g),
+        "fat_g": round(fat_g),
+        "carbs_g": round(carbs_g),
     }

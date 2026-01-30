@@ -18,16 +18,25 @@ class User(Base):
     __tablename__ = "user"
 
     user_id = Column(Integer, primary_key=True, index=True)
+
+    username = Column(String, unique=True, index=True)   # login id
+    password_hash = Column(String)
+
     name = Column(String, nullable=True)
     gender = Column(String, nullable=True)
     age = Column(Integer, nullable=True)
+
     height_cm = Column(Float, nullable=True)
     weight_kg = Column(Float, nullable=True)
     target_weight_kg = Column(Float, nullable=True)
+
     activity_level = Column(String, nullable=True)
     medical_conditions = Column(Text, nullable=True)
-    diet_preferences = Column(Text, nullable=True)
+
+    goal = Column(String, nullable=True)   # weight_loss / diabetes / muscle_gain
+
     created_at = Column(DateTime, server_default=func.now())
+
 
 
 # ---------------- Food Items ----------------

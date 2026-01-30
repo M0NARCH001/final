@@ -104,26 +104,26 @@ def list_food_logs(
 # GET /food-logs/today → logs for *today* for a user
 # Handles timezone safely
 # ============================================================
-@router.get("/today", response_model=List[FoodLogOut])
-def logs_today(
-    user_id: int = Query(...),
-    db: Session = Depends(get_db)
-):
-    today_local = datetime.now().date()
-    start = datetime.combine(today_local, time.min)
-    end = datetime.combine(today_local, time.max)
+# @router.get("/today", response_model=List[FoodLogOut])
+# def logs_today(
+#     user_id: int = Query(...),
+#     db: Session = Depends(get_db)
+# ):
+#     today_local = datetime.now().date()
+#     start = datetime.combine(today_local, time.min)
+#     end = datetime.combine(today_local, time.max)
 
-    rows = (
-        db.query(FoodLog)
-        .filter(
-            FoodLog.user_id == user_id,
-            FoodLog.logged_at >= start,
-            FoodLog.logged_at <= end,
-        )
-        .order_by(FoodLog.logged_at.desc())
-        .all()
-    )
-    return rows
+#     rows = (
+#         db.query(FoodLog)
+#         .filter(
+#             FoodLog.user_id == user_id,
+#             FoodLog.logged_at >= start,
+#             FoodLog.logged_at <= end,
+#         )
+#         .order_by(FoodLog.logged_at.desc())
+#         .all()
+#     )
+#     return rows
 
 
 # ============================================================
