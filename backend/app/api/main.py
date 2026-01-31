@@ -271,6 +271,15 @@ def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db:
 def health():
     return {"ok": True}
 
+@app.get("/")
+def read_root():
+    return {
+        "message": "Welcome to NutriMate v2 API",
+        "docs": "/docs",
+        "health": "/health",
+        "mobile_status": "Online"
+    }
+
 # -----------------------
 # Add food log (simple)
 # -----------------------
