@@ -5,7 +5,8 @@ pandas
 psycopg2-binary    # if you use Postgres; safe to have
 python-multipart
 pydantic
-gradio
+passlib[bcrypt]    # password hashing for auth
+python-jose[cryptography]  # JWT tokens (if needed)
 scikit-learn
 joblib
 numpy
