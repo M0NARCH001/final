@@ -4,8 +4,12 @@ __pycache__/
 .venv/
 venv/
 
+# --- Large data folders (not for git) ---
+NutriMate Data/
+
 # --- DB / models ---
 *.db
+!backend/nutri_indian.db
 *.joblib
 *.pkl
 
@@ -13,9 +17,6 @@ venv/
 backend/Datasets/
 backend/*.csv
 backend/**/*.csv
-
-# allow small cleaned samples if you want later
-# !backend/Datasets/sample_*.csv
 
 # --- Expo / React Native ---
 node_modules/
@@ -25,11 +26,3 @@ build/
 *.log
 .env
 .env.*
-
-# datasets / exports
-backend/*.csv
-backend/Datasets/
-*.csv
-
-# databases
-*.db

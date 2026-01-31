@@ -152,23 +152,8 @@ async function getDailySummary(user_id, goals) {
 
 // ---------------- RECOMMENDATIONS ----------------
 
-async function generateRecommendations(logs = []) {
-  const planRaw = await AsyncStorage.getItem("nutrimate_goals");
-  if (!planRaw) throw new Error("No goals stored - complete setup first");
-
-  const plan = JSON.parse(planRaw);
-
-  const payload = {
-    food_logs: (Array.isArray(logs) ? logs : []).map((l) => ({
-      food_id: l.food_id,
-      quantity: l.quantity || 1,
-    })),
-    daily_calories: plan.daily_calories,
-    protein_g: plan.protein_g,
-    fat_g: plan.fat_g,
-    carbs_g: plan.carbs_g,
-  };
-
+async function generateRecommendations(payload) {
+  // Accept full payload from caller (includes health conditions, micronutrients, etc.)
   return request("/recommendations/generate", {
     method: "POST",
     body: payload,
