@@ -130,3 +130,28 @@ class Recommendation(Base):
     rec_type = Column(String, nullable=True)
     rec_score = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------- Recommendation Impressions (ML Training Data) ----------------
+class RecommendationImpression(Base):
+    """
+    Tracks when recommendations are shown to users and whether they were added.
+    Used for training the ML recommendation model.
+    """
+    __tablename__ = "recommendation_impressions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    food_id = Column(Integer, ForeignKey("food_items.food_id"), nullable=False)
+    
+    # Context at time of impression (JSON-like text for SQLite compatibility)
+    deficits = Column(Text, nullable=True)  # JSON: {"Calories_kcal": 320, "Protein_g": 45, ...}
+    
+    shown_at = Column(DateTime, server_default=func.now())
+    rank = Column(Integer, nullable=False)  # Position in recommendation list (1-10)
+    rule_score = Column(Float, nullable=True)  # Original rule-based score
+    
+    # Outcome tracking
+    added = Column(Boolean, default=False, nullable=False)  # Did user add this food?
+    added_at = Column(DateTime, nullable=True)
+

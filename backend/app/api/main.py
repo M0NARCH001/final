@@ -13,7 +13,17 @@ from pydantic import BaseModel
 
 # DB and models
 from app.db.database import SessionLocal, engine
-from app.models import FoodItem, FoodLog, RDA, User  # import classes directly
+from app.models import FoodItem, FoodLog, RDA, User, RecommendationImpression  # import classes directly
+
+# ML components for hybrid recommendations
+try:
+    from ml.config import logger as ml_logger
+    from ml.predictor import load_model_and_scaler, get_hybrid_score
+    from ml.trainer import check_and_retrain_in_background
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+    ml_logger = None
 
 # Routers
 from app.api import users as users_router
@@ -40,7 +50,18 @@ class ComputeRequest(BaseModel):
     heart_health_focus: bool = False
 
 # FastAPI app
-app = FastAPI(title="NutriMate API (dev)")
+from contextlib import asynccontextmanager
+from fastapi import BackgroundTasks
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Load ML model if available
+    if ML_AVAILABLE:
+        load_model_and_scaler()
+        ml_logger.info("NutriMate API started with ML support")
+    yield
+
+app = FastAPI(title="NutriMate API (dev)", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(plan_router)
 app.include_router(goals_router)
@@ -740,15 +761,23 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
 
     scored = []
 
-    for f in foods:
-        score, reasons = score_food(f, deficits, conditions)
-        if score > 0:
-            scored.append((score, f, reasons))
+    for rank, f in enumerate(foods):
+        rule_score, reasons = score_food(f, deficits, conditions)
+        
+        # Try hybrid scoring if ML is available
+        if ML_AVAILABLE:
+            hybrid = get_hybrid_score(f, deficits, rule_score, rank)
+            final_score = hybrid if hybrid is not None else rule_score
+        else:
+            final_score = rule_score
+        
+        if final_score > 0:
+            scored.append((final_score, rule_score, f, reasons, rank))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
     results = []
-    for s, f, reasons in scored[:max_items]:
+    for s, rule_score, f, reasons, rank in scored[:max_items]:
         # Calculate suggested portion based on remaining calorie deficit
         kcal = f.Calories_kcal or 100
         remaining_cal = deficits.get("Calories_kcal", 500)
@@ -936,4 +965,95 @@ def compute_targets(req: ComputeRequest):
             "muscle_gain_focus": req.muscle_gain_focus,
             "heart_health_focus": req.heart_health_focus,
         }
+    }
+
+
+# -----------------------
+# ML Impression Logging (for training data)
+# -----------------------
+class ImpressionLogRequest(BaseModel):
+    user_id: int
+    food_id: int
+    deficits: dict = {}
+    rank: int
+    rule_score: float = 0.0
+    added: bool = False
+
+class ImpressionBatchRequest(BaseModel):
+    impressions: List[ImpressionLogRequest]
+
+@app.post("/impressions/log")
+def log_impression(req: ImpressionLogRequest, db: Session = Depends(get_db)):
+    """Log a single recommendation impression for ML training."""
+    impression = RecommendationImpression(
+        user_id=req.user_id,
+        food_id=req.food_id,
+        deficits=json.dumps(req.deficits),
+        rank=req.rank,
+        rule_score=req.rule_score,
+        added=req.added,
+        added_at=datetime.now() if req.added else None
+    )
+    db.add(impression)
+    db.commit()
+    return {"status": "logged", "id": impression.id}
+
+@app.post("/impressions/batch")
+def log_impressions_batch(req: ImpressionBatchRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Log multiple impressions at once (when recommendations are shown)."""
+    ids = []
+    for imp in req.impressions:
+        impression = RecommendationImpression(
+            user_id=imp.user_id,
+            food_id=imp.food_id,
+            deficits=json.dumps(imp.deficits),
+            rank=imp.rank,
+            rule_score=imp.rule_score,
+            added=imp.added,
+            added_at=datetime.now() if imp.added else None
+        )
+        db.add(impression)
+        db.flush()
+        ids.append(impression.id)
+    db.commit()
+    
+    # Trigger background retraining check
+    if ML_AVAILABLE:
+        background_tasks.add_task(check_and_retrain_in_background, db, str(req.impressions[0].user_id if req.impressions else "system"))
+    
+    return {"status": "logged", "count": len(ids), "ids": ids}
+
+@app.put("/impressions/{impression_id}/mark-added")
+def mark_impression_added(impression_id: int, db: Session = Depends(get_db)):
+    """Mark an impression as added (user logged food from recommendation)."""
+    imp = db.query(RecommendationImpression).filter_by(id=impression_id).first()
+    if not imp:
+        raise HTTPException(status_code=404, detail="Impression not found")
+    imp.added = True
+    imp.added_at = datetime.now()
+    db.commit()
+    return {"status": "updated", "id": impression_id}
+
+@app.get("/ml/status")
+def ml_status(db: Session = Depends(get_db)):
+    """Get ML model status and training statistics."""
+    import os
+    from ml.config import MODEL_PATH, LAST_TRAIN_PATH
+    
+    total_impressions = db.query(RecommendationImpression).count()
+    total_accepts = db.query(RecommendationImpression).filter_by(added=True).count()
+    
+    model_exists = os.path.exists(MODEL_PATH)
+    last_trained = None
+    if os.path.exists(LAST_TRAIN_PATH):
+        with open(LAST_TRAIN_PATH, "r") as f:
+            last_trained = f.read().strip()
+    
+    return {
+        "ml_available": ML_AVAILABLE,
+        "model_exists": model_exists,
+        "last_trained": last_trained,
+        "total_impressions": total_impressions,
+        "total_accepts": total_accepts,
+        "accept_rate": round(total_accepts / total_impressions * 100, 1) if total_impressions > 0 else 0
     }
