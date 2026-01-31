@@ -17,8 +17,17 @@ if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
         if os.path.exists(DB_FILE):
              shutil.copy2(DB_FILE, TMP_DB)
     DATABASE_URL = f"sqlite:///{TMP_DB}"
+
+# Railway with persistent volume
+elif os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+    RAILWAY_DB = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"), "nutri_indian.db")
+    # Copy initial DB to volume if not exists
+    if not os.path.exists(RAILWAY_DB) and os.path.exists(DB_FILE):
+        shutil.copy2(DB_FILE, RAILWAY_DB)
+    DATABASE_URL = f"sqlite:///{RAILWAY_DB}"
+
 else:
-    # Local development
+    # Local development or custom DATABASE_URL
     DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_FILE}")
 
 engine = create_engine(
