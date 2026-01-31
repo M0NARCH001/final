@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -8,26 +8,70 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { CameraView, useCameraPermissions } from "expo-camera";
 
-// helpers (your existing module)
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// helpers
 import {
-  addFoodLog,
-  findLocalFoods,
   getProductFromOpenFoodFacts,
 } from "../../src/openfood";
+import API from "../../src/api";
 
 export default function ScannerScreen() {
   const [barcode, setBarcode] = useState("");
   const [loading, setLoading] = useState(false);
   const [product, setProduct] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanned, setScanned] = useState(false);
+
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // -------- Get active user id --------
+  async function getUserId() {
+    const uid = await AsyncStorage.getItem("user_id");
+    return uid ? parseInt(uid) : 1;
+  }
+
+  // -------- Handle barcode scanned from camera --------
+  const handleBarcodeScanned = ({ type, data }) => {
+    if (scanned) return; // Prevent multiple scans
+    setScanned(true);
+    setBarcode(data);
+    setScannerOpen(false);
+
+    // Auto-lookup after scan
+    setTimeout(() => {
+      lookupBarcode(data);
+    }, 300);
+  };
+
+  // -------- Open camera scanner --------
+  async function openScanner() {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        Alert.alert(
+          "Camera Permission Required",
+          "Please enable camera access in your device settings to scan barcodes."
+        );
+        return;
+      }
+    }
+    setScanned(false);
+    setScannerOpen(true);
+  }
 
   // -------- Lookup barcode on OpenFoodFacts --------
-  async function lookup() {
-    if (!barcode) {
-      Alert.alert("Enter barcode", "Type or paste the barcode number and press Lookup.");
+  async function lookupBarcode(code) {
+    const barcodeToLookup = code || barcode;
+
+    if (!barcodeToLookup) {
+      Alert.alert("Enter barcode", "Type, paste, or scan a barcode.");
       return;
     }
 
@@ -36,14 +80,13 @@ export default function ScannerScreen() {
     setMatches([]);
 
     try {
-      const p = await getProductFromOpenFoodFacts(barcode);
+      const p = await getProductFromOpenFoodFacts(barcodeToLookup);
 
       if (!p) {
         Alert.alert("Not found", "No product found for that barcode.");
         return;
       }
 
-      // force new object for Android re-render
       setProduct({ ...p });
     } catch (err) {
       Alert.alert("Lookup failed", String(err?.message || err));
@@ -74,12 +117,9 @@ export default function ScannerScreen() {
     setMatches([]);
 
     try {
-      // keep query short to avoid slow LIKE searches
       const clean = name.split(",")[0].slice(0, 40);
-
       console.log("[Scanner] searching NutriMate for:", clean);
-
-      const results = await findLocalFoods(clean);
+      const results = await API.searchFoods(clean);
       setMatches(results || []);
     } catch (err) {
       Alert.alert("Match failed", String(err?.message || err));
@@ -91,11 +131,12 @@ export default function ScannerScreen() {
   // -------- Add matched food to log --------
   async function addMatchToLog(food) {
     try {
-      await addFoodLog({
+      const uid = await getUserId();
+      await API.addFoodLog({
+        user_id: uid,
         food_id: food.food_id,
         quantity: 1,
       });
-
       Alert.alert("Saved", `${food.food_name} added to your log.`);
     } catch (err) {
       Alert.alert("Save failed", String(err?.message || err));
@@ -104,18 +145,65 @@ export default function ScannerScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
+      {/* Camera Scanner Modal */}
+      <Modal visible={scannerOpen} animationType="slide">
+        <SafeAreaView style={styles.cameraContainer}>
+          <View style={styles.cameraHeader}>
+            <Text style={styles.cameraTitle}>Scan Barcode</Text>
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setScannerOpen(false)}
+            >
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: [
+                "ean13",
+                "ean8",
+                "upc_a",
+                "upc_e",
+                "code128",
+                "code39",
+                "code93",
+              ],
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+          />
+
+          <View style={styles.scanOverlay}>
+            <View style={styles.scanFrame} />
+          </View>
+
+          <Text style={styles.cameraHint}>
+            Point camera at barcode
+          </Text>
+        </SafeAreaView>
+      </Modal>
+
       <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
-        <Text style={styles.h}>Barcode lookup (OpenFoodFacts)</Text>
+        <Text style={styles.h}>Barcode Scanner</Text>
+
+        {/* Scan Button */}
+        <TouchableOpacity style={styles.scanBtn} onPress={openScanner}>
+          <Text style={styles.scanBtnText}>📷 Scan with Camera</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.orText}>— or enter manually —</Text>
 
         <TextInput
           value={barcode}
           onChangeText={setBarcode}
-          placeholder="Enter or paste barcode (e.g. 3017620422003)"
+          placeholder="Enter barcode (e.g. 3017620422003)"
           keyboardType="default"
           style={styles.input}
         />
 
-        <TouchableOpacity style={styles.btn} onPress={lookup}>
+        <TouchableOpacity style={styles.btn} onPress={() => lookupBarcode()}>
           <Text style={styles.btnText}>Lookup</Text>
         </TouchableOpacity>
 
@@ -189,11 +277,74 @@ export default function ScannerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  h: { fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  h: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
+
+  // Camera styles
+  cameraContainer: { flex: 1, backgroundColor: "#000" },
+  cameraHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#000",
+  },
+  cameraTitle: { color: "#fff", fontSize: 18, fontWeight: "600" },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeBtnText: { color: "#fff", fontSize: 20 },
+  camera: { flex: 1 },
+  scanOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    pointerEvents: "none",
+  },
+  scanFrame: {
+    width: 280,
+    height: 150,
+    borderWidth: 3,
+    borderColor: "#4CAF50",
+    borderRadius: 12,
+    backgroundColor: "transparent",
+  },
+  cameraHint: {
+    textAlign: "center",
+    color: "#fff",
+    padding: 16,
+    backgroundColor: "#000",
+    fontSize: 16,
+  },
+
+  // Scan button
+  scanBtn: {
+    backgroundColor: "#4CAF50",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  scanBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+
+  orText: {
+    textAlign: "center",
+    color: "#888",
+    marginVertical: 12,
+  },
+
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },

@@ -18,10 +18,14 @@ export default function FoodLogScreen() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const USER_ID = 1;
+  async function getUserId() {
+    const uid = await AsyncStorage.getItem("user_id");
+    return uid ? parseInt(uid) : 1;
+  }
 
   async function fetchLogs() {
-    const l = await API.getTodayLogs(USER_ID);
+    const uid = await getUserId();
+    const l = await API.getTodayLogs(uid);
     setLogs(Array.isArray(l) ? l : []);
   }
 
@@ -40,8 +44,9 @@ export default function FoodLogScreen() {
   }
 
   async function add(food) {
+    const uid = await getUserId();
     await API.addFoodLog({
-      user_id: USER_ID,
+      user_id: uid,
       food_id: food.food_id,
       quantity: 1,
       unit: "serving",

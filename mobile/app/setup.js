@@ -63,18 +63,47 @@ export default function SetupScreen() {
                 heart_health_focus: heartHealthFocus,
             };
 
-            // compute plan FIRST
+            // 1. compute targets locally (via backend compute)
             const plan = await API.computeGoals(payload);
 
-            // store BOTH
+            // 2. register user in backend to get a unique user_id
+            const userData = {
+                name: payload.name,
+                age: payload.age,
+                gender: payload.gender,
+                height_cm: payload.height_cm,
+                weight_kg: payload.weight_kg,
+                activity_level: payload.activity_level,
+                goal: payload.goal,
+            };
+
+            let userResponse;
+            try {
+                // Check if we already have a user_id (editing mode)
+                const existingId = await AsyncStorage.getItem("user_id");
+                if (existingId) {
+                    userResponse = await API.request(`/users/${existingId}`, {
+                        method: "PUT",
+                        body: userData
+                    });
+                } else {
+                    userResponse = await API.request("/users", {
+                        method: "POST",
+                        body: userData
+                    });
+                }
+            } catch (err) {
+                console.warn("User registration failed, falling back to local only", err);
+            }
+
+            const activeUserId = userResponse?.user_id || 1;
+
+            // 3. store profile, goals, AND the unique user_id
             await AsyncStorage.multiSet([
+                ["user_id", activeUserId.toString()],
                 ["nutrimate_profile", JSON.stringify(payload)],
                 ["nutrimate_goals", JSON.stringify(plan)],
             ]);
-
-            // verify
-            const check = await AsyncStorage.getItem("nutrimate_goals");
-            if (!check) throw new Error("Goals not saved");
 
             router.replace("/(tabs)");
         } catch (e) {

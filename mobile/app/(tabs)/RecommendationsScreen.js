@@ -49,9 +49,10 @@ export default function RecommendationsScreen() {
             }
 
             const plan = JSON.parse(goals);
-            const profileData = JSON.parse(profile);
+            const uidStr = await AsyncStorage.getItem("user_id");
+            const uid = uidStr ? parseInt(uidStr) : 1;
 
-            const logs = await API.getTodayLogs(1) || [];
+            const logs = await API.getTodayLogs(uid) || [];
 
             const payload = {
                 food_logs: (Array.isArray(logs) ? logs : []).map((l) => ({
@@ -89,8 +90,11 @@ export default function RecommendationsScreen() {
     }
 
     async function addFood(food) {
+        const uidStr = await AsyncStorage.getItem("user_id");
+        const uid = uidStr ? parseInt(uidStr) : 1;
+
         await API.addFoodLog({
-            user_id: 1,
+            user_id: uid,
             food_id: food.food_id,
             quantity: 1,
             unit: "serving",

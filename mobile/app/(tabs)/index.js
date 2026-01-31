@@ -85,12 +85,15 @@ export default function Home() {
 
     async function fetchData(currentGoals) {
         try {
-            const l = await API.getTodayLogs(1);
+            const uidStr = await AsyncStorage.getItem("user_id");
+            const uid = uidStr ? parseInt(uidStr) : 1;
+
+            const l = await API.getTodayLogs(uid);
             setLogs(Array.isArray(l) ? l : []);
 
             // Fetch daily summary with warnings
             try {
-                const summary = await API.getDailySummary(1, currentGoals);
+                const summary = await API.getDailySummary(uid, currentGoals);
                 if (summary.warnings) {
                     setWarnings(summary.warnings);
                 }
