@@ -31,6 +31,13 @@ export default function SetupScreen() {
     const [targetWeight, setTargetWeight] = useState("");
     const [days, setDays] = useState(60);
 
+    // Health conditions
+    const [hasDiabetes, setHasDiabetes] = useState(false);
+    const [hasHypertension, setHasHypertension] = useState(false);
+    const [hasPcos, setHasPcos] = useState(false);
+    const [muscleGainFocus, setMuscleGainFocus] = useState(false);
+    const [heartHealthFocus, setHeartHealthFocus] = useState(false);
+
     async function saveProfile() {
         try {
             if (!name || !age || !height || !weight) {
@@ -48,6 +55,12 @@ export default function SetupScreen() {
                 goal,
                 target_weight: goal === "Maintain" ? null : Number(targetWeight),
                 days,
+                // Health conditions
+                has_diabetes: hasDiabetes,
+                has_hypertension: hasHypertension,
+                has_pcos: hasPcos,
+                muscle_gain_focus: muscleGainFocus,
+                heart_health_focus: heartHealthFocus,
             };
 
             // compute plan FIRST
@@ -178,6 +191,59 @@ export default function SetupScreen() {
                         </>
                     )}
 
+                    <Text style={styles.h2}>Health Conditions</Text>
+                    <Text style={styles.hint}>Select any that apply for personalized recommendations</Text>
+
+                    <TouchableOpacity
+                        style={[styles.checkRow, hasDiabetes && styles.checkRowActive]}
+                        onPress={() => setHasDiabetes(!hasDiabetes)}
+                    >
+                        <View style={[styles.checkbox, hasDiabetes && styles.checkboxActive]}>
+                            {hasDiabetes && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkLabel}>Diabetes / Prediabetes</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.checkRow, hasHypertension && styles.checkRowActive]}
+                        onPress={() => setHasHypertension(!hasHypertension)}
+                    >
+                        <View style={[styles.checkbox, hasHypertension && styles.checkboxActive]}>
+                            {hasHypertension && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkLabel}>High Blood Pressure</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.checkRow, hasPcos && styles.checkRowActive]}
+                        onPress={() => setHasPcos(!hasPcos)}
+                    >
+                        <View style={[styles.checkbox, hasPcos && styles.checkboxActive]}>
+                            {hasPcos && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkLabel}>PCOS</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.checkRow, muscleGainFocus && styles.checkRowActive]}
+                        onPress={() => setMuscleGainFocus(!muscleGainFocus)}
+                    >
+                        <View style={[styles.checkbox, muscleGainFocus && styles.checkboxActive]}>
+                            {muscleGainFocus && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkLabel}>Muscle Gain Focus</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.checkRow, heartHealthFocus && styles.checkRowActive]}
+                        onPress={() => setHeartHealthFocus(!heartHealthFocus)}
+                    >
+                        <View style={[styles.checkbox, heartHealthFocus && styles.checkboxActive]}>
+                            {heartHealthFocus && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                        <Text style={styles.checkLabel}>Heart Health Focus</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.btn} onPress={saveProfile}>
                         <Text style={styles.btnText}>Continue</Text>
                     </TouchableOpacity>
@@ -241,5 +307,54 @@ const styles = StyleSheet.create({
     btnText: {
         color: "white",
         fontWeight: "700",
+    },
+    h2: {
+        fontSize: 18,
+        fontWeight: "600",
+        marginTop: 24,
+        marginBottom: 4,
+    },
+    hint: {
+        fontSize: 13,
+        color: "#666",
+        marginBottom: 12,
+    },
+    checkRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        marginBottom: 8,
+        borderRadius: 10,
+        backgroundColor: "#f8f8f8",
+        borderWidth: 1,
+        borderColor: "#eee",
+    },
+    checkRowActive: {
+        backgroundColor: "#e8f0fe",
+        borderColor: "#1A73E8",
+    },
+    checkbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: "#ccc",
+        marginRight: 12,
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    checkboxActive: {
+        backgroundColor: "#1A73E8",
+        borderColor: "#1A73E8",
+    },
+    checkmark: {
+        color: "white",
+        fontWeight: "700",
+        fontSize: 14,
+    },
+    checkLabel: {
+        fontSize: 15,
+        color: "#333",
     },
 });

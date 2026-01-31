@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Text,
     ForeignKey,
+    Boolean,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -34,6 +35,13 @@ class User(Base):
     medical_conditions = Column(Text, nullable=True)
 
     goal = Column(String, nullable=True)   # weight_loss / diabetes / muscle_gain
+
+    # Health conditions for dietary adjustments
+    has_diabetes = Column(Boolean, default=False)
+    has_hypertension = Column(Boolean, default=False)
+    has_pcos = Column(Boolean, default=False)
+    muscle_gain_focus = Column(Boolean, default=False)
+    heart_health_focus = Column(Boolean, default=False)
 
     created_at = Column(DateTime, server_default=func.now())
 

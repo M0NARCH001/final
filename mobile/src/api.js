@@ -11,6 +11,9 @@ const ANDROID_EMULATOR_HOST = "10.0.2.2";
 const OPENFOOD_BASE = "https://world.openfoodfacts.org/api/v0/product";
 
 const API_BASE = (() => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
   if (Platform.OS === "android") {
     return `http://${ANDROID_EMULATOR_HOST}:${PORT}`;
   }
@@ -116,11 +119,36 @@ async function getTodayReport(user_id = 1) {
   }
 }
 
+// ---------------- DAILY SUMMARY WITH WARNINGS ----------------
+
+async function getDailySummary(user_id, goals) {
+  // goals should contain targets from computed goals
+  const payload = {
+    user_id,
+    daily_calories: goals.daily_calories || 2000,
+    protein_g: goals.protein_g || 100,
+    fat_g: goals.fat_g || 60,
+    carbs_g: goals.carbs_g || 250,
+    fiber_g: goals.fiber_g || 25,
+    sugar_limit_g: goals.sugar_limit_g || 50,
+    sodium_limit_mg: goals.sodium_limit_mg || 2300,
+    calcium_mg: goals.calcium_mg || 1000,
+    iron_mg: goals.iron_mg || 18,
+    vitaminC_mg: goals.vitaminC_mg || 90,
+    folate_ug: goals.folate_ug || 400,
+  };
+
+  return request("/daily-summary", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 // ---------------- RECOMMENDATIONS ----------------
 
 async function generateRecommendations(logs = []) {
-  const planRaw = await AsyncStorage.getItem("nutrimate_plan");
-  if (!planRaw) throw new Error("No plan stored");
+  const planRaw = await AsyncStorage.getItem("nutrimate_goals");
+  if (!planRaw) throw new Error("No goals stored - complete setup first");
 
   const plan = JSON.parse(planRaw);
 
@@ -169,6 +197,7 @@ const API = {
   deleteFoodLog,
 
   getTodayReport,
+  getDailySummary,
 
   generateRecommendations,
 
@@ -187,6 +216,7 @@ export {
   getTodayLogs,
   deleteFoodLog,
   getTodayReport,
+  getDailySummary,
   generateRecommendations,
   fetchOpenFoodFacts,
   formatISODate,

@@ -32,6 +32,12 @@ class ComputeRequest(BaseModel):
     goal: str
     target_weight: float | None = None
     days: int | None = None
+    # Health conditions for dietary adjustments
+    has_diabetes: bool = False
+    has_hypertension: bool = False
+    has_pcos: bool = False
+    muscle_gain_focus: bool = False
+    heart_health_focus: bool = False
 
 # FastAPI app
 app = FastAPI(title="NutriMate API (dev)")
@@ -94,6 +100,20 @@ class RecommendationRequest(BaseModel):
     protein_g: float | None = None
     fat_g: float | None = None
     carbs_g: float | None = None
+    # Micronutrient targets
+    fiber_g: float = 25
+    sugar_limit_g: float = 50
+    sodium_limit_mg: float = 2300
+    calcium_mg: float = 1000
+    iron_mg: float = 18
+    vitaminC_mg: float = 90
+    folate_ug: float = 400
+    # Health conditions for scoring adjustments
+    has_diabetes: bool = False
+    has_hypertension: bool = False
+    has_pcos: bool = False
+    muscle_gain_focus: bool = False
+    heart_health_focus: bool = False
 
 # -----------------------
 # Nutrient keys
@@ -362,13 +382,187 @@ def get_today_logs(user_id: int, db: Session = Depends(get_db)):
             "food_id": food.food_id,
             "food_name": food.food_name,
             "quantity": qty,
+            # Macros
             "Calories_kcal": round((food.Calories_kcal or 0) * qty, 2),
             "Protein_g": round((food.Protein_g or 0) * qty, 2),
             "Carbohydrates_g": round((food.Carbohydrates_g or 0) * qty, 2),
             "Fats_g": round((food.Fats_g or 0) * qty, 2),
+            # Micronutrients
+            "FreeSugar_g": round((food.FreeSugar_g or 0) * qty, 2),
+            "Fibre_g": round((food.Fibre_g or 0) * qty, 2),
+            "Sodium_mg": round((food.Sodium_mg or 0) * qty, 2),
+            "Calcium_mg": round((food.Calcium_mg or 0) * qty, 2),
+            "Iron_mg": round((food.Iron_mg or 0) * qty, 2),
+            "VitaminC_mg": round((food.VitaminC_mg or 0) * qty, 2),
+            "Folate_ug": round((food.Folate_ug or 0) * qty, 2),
         })
 
     return results
+
+# -----------------------
+# Warning Generation
+# -----------------------
+def generate_warnings(totals: dict, targets: dict) -> list:
+    """Generate warnings based on nutrient intake vs targets."""
+    warnings = []
+    
+    # High sugar warning
+    sugar_intake = totals.get("FreeSugar_g", 0)
+    sugar_limit = targets.get("sugar_limit_g", 50)
+    if sugar_intake > sugar_limit:
+        excess = round(sugar_intake - sugar_limit, 1)
+        warnings.append({
+            "type": "high_sugar",
+            "severity": "warning",
+            "message": f"High sugar intake today (+{excess}g above {sugar_limit}g limit)"
+        })
+    
+    # High sodium warning
+    sodium_intake = totals.get("Sodium_mg", 0)
+    sodium_limit = targets.get("sodium_limit_mg", 2300)
+    if sodium_intake > sodium_limit:
+        excess = round(sodium_intake - sodium_limit, 0)
+        warnings.append({
+            "type": "high_sodium",
+            "severity": "warning",
+            "message": f"Sodium is high (+{int(excess)}mg above limit) — consider lower-salt options tomorrow"
+        })
+    
+    # Low fiber warning (< 70% of target)
+    fiber_intake = totals.get("Fibre_g", 0)
+    fiber_target = targets.get("fiber_g", 25)
+    if fiber_target > 0 and fiber_intake < fiber_target * 0.70:
+        warnings.append({
+            "type": "low_fiber",
+            "severity": "info",
+            "message": f"Low fiber intake ({round(fiber_intake, 1)}g of {fiber_target}g) — add whole grains, vegetables, or legumes"
+        })
+    
+    # Low iron warning (< 60% of target)
+    iron_intake = totals.get("Iron_mg", 0)
+    iron_target = targets.get("iron_mg", 18)
+    if iron_target > 0 and iron_intake < iron_target * 0.60:
+        warnings.append({
+            "type": "low_iron",
+            "severity": "info",
+            "message": f"Low iron intake — consider spinach, lentils, or fortified foods"
+        })
+    
+    # Low calcium warning (< 60% of target)
+    calcium_intake = totals.get("Calcium_mg", 0)
+    calcium_target = targets.get("calcium_mg", 1000)
+    if calcium_target > 0 and calcium_intake < calcium_target * 0.60:
+        warnings.append({
+            "type": "low_calcium",
+            "severity": "info",
+            "message": f"Low calcium — consider dairy, fortified foods, or leafy greens"
+        })
+    
+    # Low vitamin C warning (< 60% of target)
+    vitc_intake = totals.get("VitaminC_mg", 0)
+    vitc_target = targets.get("vitaminC_mg", 90)
+    if vitc_target > 0 and vitc_intake < vitc_target * 0.60:
+        warnings.append({
+            "type": "low_vitaminC",
+            "severity": "info",
+            "message": f"Low vitamin C — add citrus fruits, peppers, or guava"
+        })
+    
+    return warnings
+
+# -----------------------
+# Daily Summary Endpoint
+# -----------------------
+class DailySummaryRequest(BaseModel):
+    user_id: int
+    # Targets from frontend (computed via /compute)
+    daily_calories: float = 2000
+    protein_g: float = 100
+    fat_g: float = 60
+    carbs_g: float = 250
+    fiber_g: float = 25
+    sugar_limit_g: float = 50
+    sodium_limit_mg: float = 2300
+    calcium_mg: float = 1000
+    iron_mg: float = 18
+    vitaminC_mg: float = 90
+    folate_ug: float = 400
+
+@app.post("/daily-summary")
+def daily_summary(req: DailySummaryRequest, db: Session = Depends(get_db)):
+    """Get today's nutrient totals, progress vs targets, and warnings."""
+    
+    # Fetch today's logs
+    logs_rows = (
+        db.query(FoodLog, FoodItem)
+        .join(FoodItem, FoodItem.food_id == FoodLog.food_id)
+        .filter(FoodLog.user_id == req.user_id)
+        .filter(func.date(FoodLog.logged_at) == date.today())
+        .all()
+    )
+    
+    # Compute totals
+    totals = {k: 0.0 for k in NUTS}
+    for log, food in logs_rows:
+        qty = log.quantity or 1
+        for k in NUTS:
+            val = getattr(food, k, None)
+            if val is not None:
+                try:
+                    totals[k] += float(val) * qty
+                except:
+                    pass
+    totals = {k: round(v, 2) for k, v in totals.items()}
+    
+    # Build targets dict
+    targets = {
+        "Calories_kcal": req.daily_calories,
+        "Protein_g": req.protein_g,
+        "Fats_g": req.fat_g,
+        "Carbohydrates_g": req.carbs_g,
+        "fiber_g": req.fiber_g,
+        "sugar_limit_g": req.sugar_limit_g,
+        "sodium_limit_mg": req.sodium_limit_mg,
+        "calcium_mg": req.calcium_mg,
+        "iron_mg": req.iron_mg,
+        "vitaminC_mg": req.vitaminC_mg,
+        "folate_ug": req.folate_ug,
+    }
+    
+    # Generate warnings
+    warnings = generate_warnings(totals, targets)
+    
+    # Calculate progress percentages for macros
+    progress = {}
+    for k in ["Calories_kcal", "Protein_g", "Fats_g", "Carbohydrates_g"]:
+        target_val = targets.get(k, 0)
+        intake = totals.get(k, 0)
+        pct = round((intake / target_val * 100), 1) if target_val > 0 else 0
+        progress[k] = {"intake": intake, "target": target_val, "percent": pct}
+    
+    # Add micronutrient progress
+    micro_map = {
+        "Fibre_g": "fiber_g",
+        "Sodium_mg": "sodium_limit_mg",
+        "Calcium_mg": "calcium_mg",
+        "Iron_mg": "iron_mg",
+        "VitaminC_mg": "vitaminC_mg",
+        "Folate_ug": "folate_ug",
+    }
+    for total_key, target_key in micro_map.items():
+        target_val = targets.get(target_key, 0)
+        intake = totals.get(total_key, 0)
+        pct = round((intake / target_val * 100), 1) if target_val > 0 else 0
+        progress[total_key] = {"intake": intake, "target": target_val, "percent": pct}
+    
+    return {
+        "date": str(date.today()),
+        "totals": totals,
+        "targets": targets,
+        "progress": progress,
+        "warnings": warnings,
+        "warnings_count": len(warnings),
+    }
 
 # -----------------------
 # Recommendation utilities & generator
@@ -377,23 +571,46 @@ def safe_get(food, k):
     v = getattr(food, k, 0.0)
     return float(v or 0.0)
 
-def score_food(f, deficits):
+def score_food(f, deficits, conditions=None):
+    """
+    Enhanced food scoring with micronutrient bonuses and condition-based penalties.
+    Returns (score, reasons_list) tuple.
+    """
+    conditions = conditions or {}
     kcal = f.Calories_kcal or 0
     protein = f.Protein_g or 0
     fat = f.Fats_g or 0
     carbs = f.Carbohydrates_g or 0
+    fiber = f.Fibre_g or 0
+    sugar = f.FreeSugar_g or 0
+    sodium = f.Sodium_mg or 0
+    iron = f.Iron_mg or 0
+    calcium = f.Calcium_mg or 0
+    vitc = f.VitaminC_mg or 0
+    
     # clamp negative deficits to zero
     d_cal = max(deficits.get("Calories_kcal", 0), 0)
     d_pro = max(deficits.get("Protein_g", 0), 0)
     d_car = max(deficits.get("Carbohydrates_g", 0), 0)
     d_fat = max(deficits.get("Fats_g", 0), 0)
+    d_fiber = max(deficits.get("Fibre_g", 0), 0)
+    d_iron = max(deficits.get("Iron_mg", 0), 0)
+    d_calcium = max(deficits.get("Calcium_mg", 0), 0)
+    d_vitc = max(deficits.get("VitaminC_mg", 0), 0)
+    
     score = 0
+    reasons = []
 
+    # --- Macronutrient scoring ---
     # calories small weight
     score += min(kcal, d_cal) * 0.2
 
     # protein is king
-    score += min(protein, d_pro) * 4
+    if protein > 10 and d_pro > 0:
+        protein_score = min(protein, d_pro) * 4
+        score += protein_score
+        if protein > 15:
+            reasons.append("High protein")
 
     # carbs moderate
     score += min(carbs, d_car) * 1
@@ -401,6 +618,42 @@ def score_food(f, deficits):
     # fats low
     score += min(fat, d_fat) * 0.5
 
+    # --- Micronutrient bonuses ---
+    # High fiber bonus (+10)
+    if fiber >= 3:
+        score += 10
+        if fiber >= 5:
+            reasons.append("High fiber")
+    
+    # Low sugar bonus (+8)
+    if sugar < 5:
+        score += 8
+        if sugar < 2:
+            reasons.append("Low sugar")
+    
+    # Low sodium bonus (+5)
+    if sodium < 200:
+        score += 5
+        if sodium < 100:
+            reasons.append("Low sodium")
+    
+    # Micronutrient deficit addressing
+    if d_iron > 0 and iron > 2:
+        score += min(iron, d_iron) * 2
+        if iron > 3:
+            reasons.append("Good iron source")
+    
+    if d_calcium > 0 and calcium > 50:
+        score += min(calcium / 50, d_calcium / 50) * 3
+        if calcium > 100:
+            reasons.append("Good calcium source")
+    
+    if d_vitc > 0 and vitc > 10:
+        score += min(vitc, d_vitc) * 0.5
+        if vitc > 20:
+            reasons.append("Rich in Vitamin C")
+
+    # --- Penalties ---
     if fat > 20:
         score -= fat * 2
 
@@ -410,27 +663,48 @@ def score_food(f, deficits):
     if any(j in name for j in junk_words):
         score -= 80
 
-    preferred = ["paneer","egg","dal","chicken","curd","rice","roti","channa"]
+    # --- Condition-based penalties ---
+    # Diabetes: penalize high carb foods
+    if conditions.get("has_diabetes") or conditions.get("has_pcos"):
+        if carbs > 30:
+            score -= 30
+        if sugar > 10:
+            score -= 25
+    
+    # Hypertension: penalize high sodium
+    if conditions.get("has_hypertension") or conditions.get("heart_health_focus"):
+        if sodium > 400:
+            score -= 25
+        elif sodium > 200:
+            score -= 10
+
+    # --- Preferred foods bonus ---
+    preferred = ["paneer","egg","dal","chicken","curd","rice","roti","channa","fish","tofu"]
     if any(p in name for p in preferred):
         score += 20
 
-    return score
+    return (score, reasons)
 
 
-def generate_recs(db, totals, targets, user=None, max_items=5):
-
-    # targets now come directly from compute endpoint
-    # expected keys:
-    # Calories_kcal, Protein_g, Fats_g, Carbohydrates_g
-
+def generate_recs(db, totals, targets, conditions=None, max_items=5):
+    """
+    Generate food recommendations with reasons and portion suggestions.
+    """
+    conditions = conditions or {}
+    
+    # Build deficits including micronutrients
     deficits = {
-        "Calories_kcal": max(0, targets["Calories_kcal"] - totals.get("Calories_kcal", 0)),
-        "Protein_g": max(0, targets["Protein_g"] - totals.get("Protein_g", 0)),
-        "Fats_g": max(0, targets["Fats_g"] - totals.get("Fats_g", 0)),
-        "Carbohydrates_g": max(0, targets["Carbohydrates_g"] - totals.get("Carbohydrates_g", 0)),
+        "Calories_kcal": max(0, targets.get("Calories_kcal", 0) - totals.get("Calories_kcal", 0)),
+        "Protein_g": max(0, targets.get("Protein_g", 0) - totals.get("Protein_g", 0)),
+        "Fats_g": max(0, targets.get("Fats_g", 0) - totals.get("Fats_g", 0)),
+        "Carbohydrates_g": max(0, targets.get("Carbohydrates_g", 0) - totals.get("Carbohydrates_g", 0)),
+        "Fibre_g": max(0, targets.get("fiber_g", 25) - totals.get("Fibre_g", 0)),
+        "Iron_mg": max(0, targets.get("iron_mg", 18) - totals.get("Iron_mg", 0)),
+        "Calcium_mg": max(0, targets.get("calcium_mg", 1000) - totals.get("Calcium_mg", 0)),
+        "VitaminC_mg": max(0, targets.get("vitaminC_mg", 90) - totals.get("VitaminC_mg", 0)),
     }
 
-    print("DEFICITS:", deficits)
+    logger.info(f"DEFICITS: {deficits}")
 
     foods = db.query(FoodItem).all()
 
@@ -442,18 +716,22 @@ def generate_recs(db, totals, targets, user=None, max_items=5):
         protein = f.Protein_g or 0
         fat = f.Fats_g or 0
         carbs = f.Carbohydrates_g or 0
+        sugar = f.FreeSugar_g or 0
 
-    # remove ultra-empty + sugar bombs
         # remove ultra-empty
         if kcal < 40:
             continue
 
-        # remove sugar bombs
-        if carbs > 40 and protein < 5:
+        # remove sugar bombs (unless low cal)
+        if carbs > 40 and protein < 5 and sugar > 15:
             continue
 
         # remove pure fat junk
         if fat > 20 and protein < 5:
+            continue
+        
+        # For diabetes, skip very high carb items
+        if (conditions.get("has_diabetes") or conditions.get("has_pcos")) and carbs > 50:
             continue
 
         clean.append(f)
@@ -463,18 +741,38 @@ def generate_recs(db, totals, targets, user=None, max_items=5):
     scored = []
 
     for f in foods:
-        score = score_food(f, deficits)
+        score, reasons = score_food(f, deficits, conditions)
         if score > 0:
-            scored.append((score, f))
+            scored.append((score, f, reasons))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
     results = []
-    for s, f in scored[:max_items]:
+    for s, f, reasons in scored[:max_items]:
+        # Calculate suggested portion based on remaining calorie deficit
+        kcal = f.Calories_kcal or 100
+        remaining_cal = deficits.get("Calories_kcal", 500)
+        suggested_portion_g = min(200, max(50, round(remaining_cal / (kcal / 100) * 100 / 4)))
+        
+        # Build reason string
+        if reasons:
+            reason_str = ", ".join(reasons[:3])  # Max 3 reasons
+        else:
+            reason_str = "Helps meet your nutritional targets"
+        
         results.append({
             "food_id": f.food_id,
             "food_name": f.food_name,
-            "score": round(float(s), 2)
+            "score": round(float(s), 2),
+            "reason": reason_str,
+            "suggested_portion_g": suggested_portion_g,
+            # Include nutrient highlights
+            "nutrients": {
+                "Calories_kcal": round(f.Calories_kcal or 0, 1),
+                "Protein_g": round(f.Protein_g or 0, 1),
+                "Fibre_g": round(f.Fibre_g or 0, 1),
+                "FreeSugar_g": round(f.FreeSugar_g or 0, 1),
+            }
         })
 
     return results
@@ -496,9 +794,24 @@ def recommendations_generate(req: RecommendationRequest, db: Session = Depends(g
         "Protein_g": req.protein_g or 0,
         "Fats_g": req.fat_g or 0,
         "Carbohydrates_g": req.carbs_g or 0,
+        "fiber_g": req.fiber_g,
+        "sugar_limit_g": req.sugar_limit_g,
+        "sodium_limit_mg": req.sodium_limit_mg,
+        "calcium_mg": req.calcium_mg,
+        "iron_mg": req.iron_mg,
+        "vitaminC_mg": req.vitaminC_mg,
+        "folate_ug": req.folate_ug,
+    }
+    
+    conditions = {
+        "has_diabetes": req.has_diabetes,
+        "has_hypertension": req.has_hypertension,
+        "has_pcos": req.has_pcos,
+        "muscle_gain_focus": req.muscle_gain_focus,
+        "heart_health_focus": req.heart_health_focus,
     }
 
-    recs = generate_recs(db, totals, targets, max_items=5)
+    recs = generate_recs(db, totals, targets, conditions=conditions, max_items=5)
 
     return {
         "totals": totals,
@@ -544,10 +857,61 @@ def compute_targets(req: ComputeRequest):
     # --- Safety clamps ---
     daily_calories = max(1200, daily_calories)
 
-    # --- Macros ---
-    protein_g = req.weight_kg * (2 if req.goal == "Weight Gain" else 1.6)
-    fat_g = (daily_calories * 0.25) / 9
-    carbs_g = (daily_calories - protein_g * 4 - fat_g * 9) / 4
+    # --- Base protein calculation ---
+    base_protein_mult = 1.6
+    if req.goal == "Weight Gain":
+        base_protein_mult = 2.0
+    if req.muscle_gain_focus:
+        base_protein_mult = 2.2  # Higher for muscle focus
+    
+    protein_g = req.weight_kg * base_protein_mult
+
+    # --- Condition-based macro adjustments ---
+    # Default carb percentage: ~50% of calories
+    carb_percent = 0.50
+    
+    # Diabetes/PCOS: lower carbs to ~40%
+    if req.has_diabetes or req.has_pcos:
+        carb_percent = 0.40
+    
+    # Fat: 25% default, 30% for heart health (healthy fats emphasis)
+    fat_percent = 0.25
+    if req.heart_health_focus:
+        fat_percent = 0.30
+    
+    fat_g = (daily_calories * fat_percent) / 9
+    
+    # Carbs: fill remaining after protein and fat
+    protein_cal = protein_g * 4
+    fat_cal = fat_g * 9
+    remaining_cal = daily_calories - protein_cal - fat_cal
+    carbs_g = max(remaining_cal / 4, 50)  # Minimum 50g carbs
+
+    # --- Micronutrient targets (RDA-based) ---
+    # Sugar limit: WHO recommends < 10% of calories, stricter for diabetes
+    sugar_limit_g = round((daily_calories * 0.10) / 4)  # ~10% of calories
+    if req.has_diabetes or req.has_pcos:
+        sugar_limit_g = 25  # Stricter: ~25g max for blood sugar control
+    
+    # Sodium: 2300mg default, 2000mg for hypertension/heart health
+    sodium_limit_mg = 2300
+    if req.has_hypertension or req.heart_health_focus:
+        sodium_limit_mg = 2000
+    
+    # Fiber: 25-30g based on gender (ICMR/USDA)
+    fiber_g = 30 if req.gender.lower() == "male" else 25
+    
+    # Iron: gender-based RDA
+    iron_mg = 8 if req.gender.lower() == "male" else 18
+    
+    # Calcium: 1000mg for adults (ICMR)
+    calcium_mg = 1000
+    
+    # Vitamin C: 90mg male, 75mg female (RDA)
+    vitaminC_mg = 90 if req.gender.lower() == "male" else 75
+    
+    # Folate: 400mcg adults (RDA)
+    folate_ug = 400
 
     return {
         "bmr": round(bmr),
@@ -556,4 +920,20 @@ def compute_targets(req: ComputeRequest):
         "protein_g": round(protein_g),
         "fat_g": round(fat_g),
         "carbs_g": round(carbs_g),
+        # Micronutrient targets
+        "fiber_g": fiber_g,
+        "sugar_limit_g": sugar_limit_g,
+        "sodium_limit_mg": sodium_limit_mg,
+        "calcium_mg": calcium_mg,
+        "iron_mg": iron_mg,
+        "vitaminC_mg": vitaminC_mg,
+        "folate_ug": folate_ug,
+        # Echo conditions for frontend reference
+        "conditions": {
+            "has_diabetes": req.has_diabetes,
+            "has_hypertension": req.has_hypertension,
+            "has_pcos": req.has_pcos,
+            "muscle_gain_focus": req.muscle_gain_focus,
+            "heart_health_focus": req.heart_health_focus,
+        }
     }
