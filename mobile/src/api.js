@@ -3,6 +3,7 @@
 
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 
 const DEV_MACHINE_IP = "172.20.10.2"; // <-- your laptop IP
 const PORT = 8000;
@@ -10,10 +11,15 @@ const PORT = 8000;
 const ANDROID_EMULATOR_HOST = "10.0.2.2";
 const OPENFOOD_BASE = "https://world.openfoodfacts.org/api/v0/product";
 
+// Get API URL from expo-constants (works in EAS builds) or fall back to dev
 const API_BASE = (() => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+  // Check expo-constants extra config first (for EAS builds)
+  const extraUrl = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
+  if (extraUrl) {
+    console.log("[API] Using production URL from config:", extraUrl);
+    return extraUrl;
   }
+  // Fallback for local development
   if (Platform.OS === "android") {
     return `http://${ANDROID_EMULATOR_HOST}:${PORT}`;
   }
