@@ -11,7 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import API from "../../src/api";
-
+import CalorieProgressCircle from "../../components/CalorieProgressCircle";
 /* ---------- Progress Bar ---------- */
 function ProgressBar({ label, value = 0, target = 0 }) {
     const pct =
@@ -97,7 +97,16 @@ export default function Home() {
     return (
         <SafeAreaView style={styles.container}>
             <Text style={styles.h1}>Today</Text>
+            <View style={{ alignItems: "center", marginVertical: 16 }}>
+                <CalorieProgressCircle
+                    progress={totals.Calories_kcal || 0}
+                    goal={goals.Calories_kcal || 2000}
+                />
 
+                <Text style={{ marginTop: 6, color: "#666" }}>
+                    {Math.round(totals.Calories_kcal || 0)} / {Math.round(goals.Calories_kcal || 2000)} kcal
+                </Text>
+            </View>
             <View style={styles.card}>
                 <Text style={styles.big}>{Math.round(totals.Calories_kcal)} kcal</Text>
 

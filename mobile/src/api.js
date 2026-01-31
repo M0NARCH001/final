@@ -4,7 +4,7 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const DEV_MACHINE_IP = "192.168.29.117"; // <-- your laptop IP
+const DEV_MACHINE_IP = "172.20.10.2"; // <-- your laptop IP
 const PORT = 8000;
 
 const ANDROID_EMULATOR_HOST = "10.0.2.2";
