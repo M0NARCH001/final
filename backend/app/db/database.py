@@ -26,6 +26,11 @@ elif os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
         shutil.copy2(DB_FILE, RAILWAY_DB)
     DATABASE_URL = f"sqlite:///{RAILWAY_DB}"
 
+# PythonAnywhere - uses project directory (persistent by default)
+elif os.environ.get("PYTHONANYWHERE_SITE"):
+    # DB_FILE already points to project directory, which is persistent
+    DATABASE_URL = f"sqlite:///{DB_FILE}"
+
 else:
     # Local development or custom DATABASE_URL
     DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_FILE}")

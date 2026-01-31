@@ -23,7 +23,8 @@
       "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA"
-      ]
+      ],
+      "package": "com.vvirothi.nutrimate"
     },
     "web": {
       "output": "static",
@@ -42,12 +43,10 @@
             "backgroundColor": "#000000"
           }
         }
-      ],
-      "expo-barcode-scanner"
+      ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},

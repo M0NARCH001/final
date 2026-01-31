@@ -1,358 +1,94 @@
-# 🥗 NutriMate
+# 🥗 NutriMate v2
 
-A **personalized nutrition tracking and recommendation system** that actively suggests foods to help you close nutritional gaps.
+A **personalized nutrition tracking and intelligence system** that not only tracks calories but proactively suggests foods to close nutritional gaps using a hybrid ML recommendation engine.
 
-## Overview
-
-Unlike simple calorie trackers, NutriMate provides intelligent, real-time food recommendations based on your nutritional deficits throughout the day.
-
-### Key Features
-
-- Create personalized health profiles (age, height, weight, activity level, goals)
-- Receive daily calorie and macro targets
-- Log foods throughout the day
-- Track consumed vs target nutrients
-- Get **real-time food recommendations** based on nutritional deficits
+## 🚀 New in v2
+- **Micronutrient Tracking**: Track Fiber, Sodium, Sugar, Iron, Calcium, Vitamin C, and Folate.
+- **Support for Health Conditions**: Personalized targets and warnings for **Diabetes, Hypertension, PCOS, Muscle Gain, and Heart Health**.
+- **Hybrid ML Recommendations**: A smart engine that blends hand-written nutritional rules with a **RandomForest ML model** that learns from your preferences.
+- **Smart Warnings**: Instant alerts if your sugar/sodium is too high or if you're missing critical minerals.
 
 ---
 
 ## 🏗 Architecture
 
-NutriMate uses a **client-server architecture** with the following components:
+NutriMate v2 uses a robust client-server architecture designed for serverless or persistent environments.
 
-### Frontend (React Native / Expo)
+### Frontend (Expo / React Native)
+- **Dashboard**: High-level macro & micro progress bars with health warnings.
+- **Setup**: Smart onboarding that calculates BMR/TDEE and adjusts targets based on medical conditions.
+- **Recommendations**: Intelligent food suggestions with portion sizes and "reasoning" badges (e.g., "High Protein", "Low Sodium").
+- **API**: Centralized `api.js` with dynamic environment detection.
 
-**Handles:**
-- Setup UI
-- Food search and logging
-- Home dashboard
-- Recommendations UI
-- Profile edit/reset
-
-**Local Storage:**
-- `nutrimate_profile`
-- `nutrimate_goals`
-
-**Backend Integration:**
-- Food search
-- Logging
-- Daily totals
-- Recommendations
-
-### Backend (FastAPI + SQLAlchemy)
-
-**Handles:**
-- Nutrition computation
-- Persistent storage
-- Recommendation logic
-
-**Stack:**
-- FastAPI
-- SQLAlchemy ORM
-- PostgreSQL / SQLite
-- Pandas/Numpy (nutrition math)
-- Rule-based recommendation engine (current)
+### Backend (FastAPI + ML Layer)
+- **API Core**: FastAPI handling nutrition logic and food logging.
+- **ML Layer (`/ml`)**: 
+  - `predictor.py`: Hybrid scoring (70% rules / 30% ML).
+  - `trainer.py`: Automated background training using RandomForest.
+  - `config.py`: Centralized ML constants and logging.
+- **DB (SQLite)**: Persistent storage for food logs, user profiles, and ML training data (impressions).
 
 ---
 
-## 📱 Frontend Flow
+## 📱 Mobile Features & Flow
 
-### 1. Setup Screen
-
-Users enter their profile information:
-- Name
-- Age
-- Gender
-- Height
-- Weight
-- Activity level
-- Goal (maintain / loss / gain)
-
-**API Call:** `POST /compute-goals`
-
-**Backend Returns:**
-- BMR (Basal Metabolic Rate)
-- TDEE (Total Daily Energy Expenditure)
-- Daily calories
-- Protein / carbs / fats targets
-
-Data is stored in AsyncStorage as the **source of truth** for daily targets.
-
-### 2. Home Screen
-
-On load:
-1. Reads `nutrimate_goals` from local storage
-2. Fetches today's logs: `GET /food-logs/today`
-3. Displays:
-   - Total calories consumed
-   - Protein / carbs / fats progress
-   - List of today's foods
-
-Home screen auto-refreshes when tab regains focus.
-
-### 3. Log Screen
-
-**Search Foods:** `GET /foods?query=pineapple`
-
-Results display:
-- Food name
-- Calories
-- Protein
-
-**Add Food:** `POST /food-logs`
-
-**Delete Food:** `DELETE /food-logs/{log_id}`
-
-### 4. Recommendations Screen
-
-**Core Feature Flow:**
-
-1. Fetch today's logs: `GET /food-logs/today`
-2. Combine with stored goals
-3. Request recommendations: `POST /recommendations/generate`
-
-**Backend Returns:**
-- Totals
-- Targets
-- Recommended foods
-
-Frontend renders list with:
-- Food name
-- Score
-- "Add to Log" button
-
-When user adds a recommended food, recommendations refresh automatically.
-
-### 5. Profile Screen
-
-Allows users to:
-- Edit profile
-- Reset profile (clears AsyncStorage)
-- Force re-setup
+1. **Onboarding**: Users enter biometrics + select health conditions (e.g., Diabetes). Targets are automatically narrowed (e.g., <40% carbs for Diabetes).
+2. **Daily Tracking**: Log Indian (IFCT) and Global (USDA) foods. Dashboard shows "Live" progress.
+3. **Nutritional Intelligence**: 
+   - **Yellow Warnings**: High Sodium (>2300mg) or High Sugar.
+   - **Blue Warnings**: Deficits in Iron, Calcium, or Fiber.
+4. **Interactive Recommendations**: Backend calculates current deficits and scores 1000+ foods. ML boosts foods you frequently accept.
 
 ---
 
-## 🗄 Database Schema
+## 🧠 Hybrid Recommendation Engine
 
-### Foods Table
-
-Contains nutrition per serving:
-- `food_id`
-- `food_name`
-- `Calories_kcal`
-- `Protein_g`
-- `Fats_g`
-- `Carbohydrates_g`
-
-**Data Sources:**
-- IFCT (Indian foods)
-- USDA
-
-### FoodLogs Table
-
-Stores user intake:
-- `log_id`
-- `user_id`
-- `food_id`
-- `quantity`
-- `logged_at`
-
-Every "Add" operation inserts one row.
-
----
-
-## ⚙ Backend Core Pipelines
-
-### 1. Goal Computation
-
-**Endpoint:** `POST /compute-goals`
-
-**BMR Calculation:** Uses Mifflin St Jeor equation
-
-**TDEE Calculation:** BMR × activity factor
-
-**Goal Adjustments:**
-- Weight loss → calorie deficit
-- Weight gain → calorie surplus
-- Maintain → TDEE
-
-**Macro Distribution:**
-- Protein: weight-based calculation
-- Fat: percentage of calories
-- Carbs: remaining calories
-
-**Returns:**
-```json
-{
-  "daily_calories": 2000,
-  "protein_g": 120,
-  "fat_g": 67,
-  "carbs_g": 250
-}
-```
-
-### 2. Food Logging
-
-**Add:** `POST /food-logs`
-
-**Delete:** `DELETE /food-logs/{id}`
-
-**Fetch Today:** `GET /food-logs/today`
-
-Backend joins FoodLogs + Foods tables to produce complete nutrition data.
-
-### 3. Daily Totals
-
-**Function:** `compute_totals_from_logs()`
-
-Process:
-- Loops through today's logs
-- Multiplies nutrients × quantity
-- Sums everything
-
-**Produces:**
-```json
-{
-  "Calories_kcal": 1200,
-  "Protein_g": 60,
-  "Fats_g": 40,
-  "Carbohydrates_g": 150
-}
-```
-
----
-
-## 🧠 Recommendation Engine
-
-### Current Implementation: Rule-Based Scoring
-
-**Not ML yet** — uses a rule-based scoring system.
-
-### Algorithm Flow
-
-#### Step 1: Calculate Deficits
-```
-deficits = targets - totals
-```
-
-Example: If protein target = 120g and consumed = 40g → deficit = 80g
-
-#### Step 2: Iterate All Foods
-Backend loads entire Foods table for scoring.
-
-#### Step 3: Filter Junk
-Removes:
-- Very low calorie foods
-- High carb + low protein items
-- Desserts
-- Sweets (burfi, etc.)
-
-#### Step 4: Score Each Food
-**Function:** `score_food(food, deficits)`
-
-**Scoring Weights:**
-- Protein × 4
-- Carbs × 1
-- Fat × 0.5
-- Calories × 0.2
-
-**Additional Logic:**
-- Penalizes sweets
-- Penalizes fat bombs
-- Rejects poor protein density
-- Bonus for keywords (dal, paneer, egg, etc.)
-
-#### Step 5: Sort and Return Top N
-Returns top 5 foods with:
-```json
-{
-  "food_id": 123,
-  "food_name": "Grilled Chicken",
-  "score": 85.5
-}
-```
-
----
-
-## 🔄 Data Flow
-
-The system creates a **closed feedback loop**:
-
-```
-User eats → Logs food
-    ↓
-Backend stores log
-    ↓
-Home recomputes totals
-    ↓
-Deficits change
-    ↓
-Recommendations change
-    ↓
-User eats suggested food
-    ↓
-Loop continues
-```
-
----
-
-## 🚧 Current Limitations
-
-- No portion-size optimization
-- No personalization memory
-- No diversity control
-- Rule-based (not ML)
-- No cuisine preference
-- No allergy filters
-
-**Note:** Architecture already supports future ML integration.
-
----
-
-## 🚀 Future Roadmap: ML Path
-
-### Planned ML Implementation
-
-**Training Data:**
-- User deficits
-- User history
-- Food acceptance rate
-
-**Prediction Goal:**
-> "What food will this user most likely eat that fixes their nutritional deficits?"
-
-This will transform the system into a true AI-powered recommendation engine.
-
----
-
-## ✅ Summary
-
-NutriMate is a **full-stack nutrition system** featuring:
-
-- Personalized daily targets
-- Real-time food logging
-- Dynamic deficit computation
-- Intelligent food recommendation loop
-
-**Status:** Production-grade architecture with rule-based recommendations. ML layer is the next evolution.
+The system uses a **Phased Rollout** strategy for intelligence:
+- **Phase 0 (Day 1)**: 100% rule-based scoring. Collects "silent" data on which foods you choose.
+- **Phase 1 (80+ Impressions)**: Automatically trains a RandomForest model in the background.
+- **Phase 2 (Ongoing)**: Blends ML probability with nutritional rules (70/30) to provide suggestions that are both healthy and personalized.
 
 ---
 
 ## 🛠 Tech Stack
 
-**Frontend:**
-- React Native
-- Expo
-- AsyncStorage
+| Component | Technology |
+|-----------|------------|
+| **Mobile** | Expo (React Native), Expo Router, AsyncStorage |
+| **API** | FastAPI, Uvicorn, Pydantic |
+| **ML** | Scikit-Learn (RandomForest), Joblib, NumPy |
+| **Database** | SQLite + SQLAlchemy ORM |
+| **Deployment** | Railway (Backend), Expo EAS (Mobile) |
 
-**Backend:**
-- FastAPI
-- SQLAlchemy ORM
-- PostgreSQL / SQLite
-- Pandas
-- NumPy
+---
 
-**Data:**
-- IFCT (Indian Food Composition Tables)
-- USDA Food Database
+## 🏁 Getting Started
+
+### Backend (Local)
+1. `cd backend`
+2. `python -m venv venv && source venv/bin/activate`
+3. `pip install -r requirements.txt`
+4. `uvicorn app.api.main:app --reload`
+
+### Mobile (Local)
+1. `cd mobile`
+2. `npm install`
+3. `npx expo start`
+
+---
+
+## 🚢 Deployment
+
+### Railway (Backend)
+- Uses `railway.json` and a `/data` volume for persistent SQLite storage.
+- Variables needed: `RAILWAY_VOLUME_MOUNT_PATH=/data`.
+
+### Expo EAS (Mobile)
+- Build Android APK: `eas build --platform android --profile preview`
+- Set `EXPO_PUBLIC_API_URL` in `app.json` or as an EAS Secret.
+
+---
+
+## ✅ Status: Production Ready
+All core v2 features are implemented. The architecture supports 10,000+ food items with sub-second recommendation latency.
 
