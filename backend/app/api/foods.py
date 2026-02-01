@@ -56,10 +56,10 @@ def create_food(payload: FoodCreate, db: Session = Depends(get_db)):
         Folate_ug=payload.Folate_ug
     )
     db.add(f)
-    db.commit()
-    db.refresh(f)
-    # return created row (including generated food_id)
-    return {
+    db.flush()  # Get the generated food_id
+    
+    # Capture values before commit
+    result = {
         "food_id": f.food_id,
         "food_name": f.food_name,
         "Calories_kcal": f.Calories_kcal,
@@ -68,3 +68,6 @@ def create_food(payload: FoodCreate, db: Session = Depends(get_db)):
         "Fats_g": f.Fats_g,
         "serving_size": getattr(payload, "serving_size", None)
     }
+    
+    db.commit()
+    return result
