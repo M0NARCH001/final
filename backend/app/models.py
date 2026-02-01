@@ -95,7 +95,7 @@ class FoodLog(Base):
     __tablename__ = "food_log"
 
     log_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=True)
+    user_id = Column(Integer, nullable=False, index=True)  # No FK - allows local device IDs
 
     # IMPORTANT: points to food_items
     food_id = Column(Integer, ForeignKey("food_items.food_id"), nullable=False)

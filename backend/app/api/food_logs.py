@@ -54,8 +54,9 @@ class FoodLogOut(BaseModel):
 # ============================================================
 @router.post("", response_model=FoodLogOut)
 def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
-    # Auto-assign user_id if frontend didn't send (prevents NULL rows)
-    user_id = payload.user_id if payload.user_id is not None else 1
+    # Require user_id - no more fallback to 1
+    if payload.user_id is None:
+        raise HTTPException(status_code=400, detail="user_id is required")
 
     # Validate food exists
     exists = db.query(FoodItem).filter(FoodItem.food_id == payload.food_id).first()
@@ -63,7 +64,7 @@ def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Food id {payload.food_id} not found")
 
     entry = FoodLog(
-        user_id=user_id,
+        user_id=payload.user_id,
         food_id=payload.food_id,
         quantity=payload.quantity,
         unit=payload.unit,

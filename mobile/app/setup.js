@@ -18,6 +18,7 @@ import API from "../src/api";
 export default function SetupScreen() {
     const router = useRouter();
 
+    const [username, setUsername] = useState("");
     const [name, setName] = useState("");
     const [age, setAge] = useState("");
     const [gender, setGender] = useState("Male");
@@ -40,8 +41,15 @@ export default function SetupScreen() {
 
     async function saveProfile() {
         try {
-            if (!name || !age || !height || !weight) {
-                alert("Fill all required fields");
+            if (!username || !name || !age || !height || !weight) {
+                alert("Fill all required fields (including username)");
+                return;
+            }
+
+            // Validate username format (alphanumeric, 3-20 chars)
+            const usernameClean = username.trim().toLowerCase();
+            if (!/^[a-z0-9_]{3,20}$/.test(usernameClean)) {
+                alert("Username must be 3-20 characters, letters/numbers/underscore only");
                 return;
             }
 
@@ -66,17 +74,17 @@ export default function SetupScreen() {
             // 1. compute targets locally (via backend compute)
             const plan = await API.computeGoals(payload);
 
-            // 2. Generate or retrieve a unique user identifier
+            // 2. Check if username exists or register new user
             let activeUserId;
-            const existingId = await AsyncStorage.getItem("user_id");
+            const existingStoredId = await AsyncStorage.getItem("user_id");
+            const storedUsername = await AsyncStorage.getItem("username");
 
-            if (existingId) {
-                // Editing mode - keep existing ID
-                activeUserId = existingId;
+            // If we're editing AND username hasn't changed, just update
+            if (existingStoredId && storedUsername === usernameClean) {
+                activeUserId = existingStoredId;
 
-                // Try to update backend (optional, non-blocking)
                 try {
-                    await API.request(`/users/${existingId}`, {
+                    await API.request(`/users/${existingStoredId}`, {
                         method: "PUT",
                         body: {
                             name: payload.name,
@@ -88,40 +96,47 @@ export default function SetupScreen() {
                         }
                     });
                 } catch (err) {
-                    console.warn("Backend user update failed (non-fatal):", err);
+                    console.warn("Backend user update failed:", err);
                 }
             } else {
-                // New user - try to register with backend, or generate local unique ID
+                // Check if username is available
                 try {
-                    const userResponse = await API.request("/users", {
+                    const checkResult = await API.request("/users/check-username", {
                         method: "POST",
-                        body: {
-                            name: payload.name,
-                            age: payload.age,
-                            gender: payload.gender,
-                            height_cm: payload.height_cm,
-                            weight_kg: payload.weight_kg,
-                            activity_level: payload.activity_level,
-                        }
+                        body: { username: usernameClean }
                     });
-                    activeUserId = userResponse?.user_id?.toString();
-                } catch (err) {
-                    console.warn("Backend user registration failed:", err);
-                }
 
-                // If backend failed or returned nothing, generate a unique device ID
-                // Format: device_<timestamp>_<random> - guaranteed unique per device
-                if (!activeUserId) {
-                    const timestamp = Date.now();
-                    const random = Math.random().toString(36).substring(2, 10);
-                    activeUserId = `device_${timestamp}_${random}`;
-                    console.log("[Setup] Generated local device ID:", activeUserId);
+                    if (checkResult.available) {
+                        // Register new user
+                        const registerResult = await API.request("/users/register", {
+                            method: "POST",
+                            body: {
+                                username: usernameClean,
+                                name: payload.name,
+                                age: payload.age,
+                                gender: payload.gender,
+                                height_cm: payload.height_cm,
+                                weight_kg: payload.weight_kg,
+                                activity_level: payload.activity_level,
+                            }
+                        });
+                        activeUserId = registerResult.user_id.toString();
+                    } else {
+                        // Username exists - use that user_id (like a login)
+                        activeUserId = checkResult.user_id.toString();
+                        alert(`Welcome back! Logged in as ${usernameClean}`);
+                    }
+                } catch (err) {
+                    console.error("Username check/register failed:", err);
+                    alert("Could not verify username. Please check your connection.");
+                    return;
                 }
             }
 
-            // 3. store profile, goals, AND the unique user_id
+            // 3. store profile, goals, username, AND the unique user_id
             await AsyncStorage.multiSet([
                 ["user_id", activeUserId.toString()],
+                ["username", usernameClean],
                 ["nutrimate_profile", JSON.stringify(payload)],
                 ["nutrimate_goals", JSON.stringify(plan)],
             ]);
@@ -139,9 +154,20 @@ export default function SetupScreen() {
 
                     <Text style={styles.h1}>Setup Profile</Text>
 
-                    <Text style={styles.label}>Name</Text>
+                    <Text style={styles.label}>Username *</Text>
                     <TextInput
-                        placeholder="Name"
+                        placeholder="Choose a unique username"
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={styles.input}
+                    />
+                    <Text style={styles.hint}>3-20 characters, letters/numbers/underscore only</Text>
+
+                    <Text style={styles.label}>Name *</Text>
+                    <TextInput
+                        placeholder="Your name"
                         value={name}
                         onChangeText={setName}
                         style={styles.input}
