@@ -104,6 +104,8 @@ def get_db():
 # -----------------------
 # Database Migration (run once to add missing columns)
 # -----------------------
+from sqlalchemy import text
+
 @app.get("/migrate-db")
 def migrate_database():
     """Add missing columns to existing tables (safe to run multiple times)"""
@@ -112,11 +114,11 @@ def migrate_database():
     try:
         with engine.connect() as conn:
             # Check if username column exists in user table
-            result = conn.execute("PRAGMA table_info(user)").fetchall()
+            result = conn.execute(text("PRAGMA table_info(user)")).fetchall()
             columns = [row[1] for row in result]
             
             if "username" not in columns:
-                conn.execute("ALTER TABLE user ADD COLUMN username TEXT")
+                conn.execute(text("ALTER TABLE user ADD COLUMN username TEXT"))
                 results.append("Added 'username' column to user table")
             else:
                 results.append("'username' column already exists")
