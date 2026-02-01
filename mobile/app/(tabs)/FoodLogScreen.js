@@ -21,7 +21,10 @@ export default function FoodLogScreen() {
 
   async function getUserId() {
     const uid = await AsyncStorage.getItem("user_id");
-    return uid ? parseInt(uid) : 1;
+    if (!uid) {
+      throw new Error("user_id not found - setup incomplete");
+    }
+    return parseInt(uid);
   }
 
   async function fetchLogs() {

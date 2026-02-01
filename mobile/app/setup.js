@@ -66,37 +66,58 @@ export default function SetupScreen() {
             // 1. compute targets locally (via backend compute)
             const plan = await API.computeGoals(payload);
 
-            // 2. register user in backend to get a unique user_id
-            const userData = {
-                name: payload.name,
-                age: payload.age,
-                gender: payload.gender,
-                height_cm: payload.height_cm,
-                weight_kg: payload.weight_kg,
-                activity_level: payload.activity_level,
-                goal: payload.goal,
-            };
+            // 2. Generate or retrieve a unique user identifier
+            let activeUserId;
+            const existingId = await AsyncStorage.getItem("user_id");
 
-            let userResponse;
-            try {
-                // Check if we already have a user_id (editing mode)
-                const existingId = await AsyncStorage.getItem("user_id");
-                if (existingId) {
-                    userResponse = await API.request(`/users/${existingId}`, {
+            if (existingId) {
+                // Editing mode - keep existing ID
+                activeUserId = existingId;
+
+                // Try to update backend (optional, non-blocking)
+                try {
+                    await API.request(`/users/${existingId}`, {
                         method: "PUT",
-                        body: userData
+                        body: {
+                            name: payload.name,
+                            age: payload.age,
+                            gender: payload.gender,
+                            height_cm: payload.height_cm,
+                            weight_kg: payload.weight_kg,
+                            activity_level: payload.activity_level,
+                        }
                     });
-                } else {
-                    userResponse = await API.request("/users", {
-                        method: "POST",
-                        body: userData
-                    });
+                } catch (err) {
+                    console.warn("Backend user update failed (non-fatal):", err);
                 }
-            } catch (err) {
-                console.warn("User registration failed, falling back to local only", err);
-            }
+            } else {
+                // New user - try to register with backend, or generate local unique ID
+                try {
+                    const userResponse = await API.request("/users", {
+                        method: "POST",
+                        body: {
+                            name: payload.name,
+                            age: payload.age,
+                            gender: payload.gender,
+                            height_cm: payload.height_cm,
+                            weight_kg: payload.weight_kg,
+                            activity_level: payload.activity_level,
+                        }
+                    });
+                    activeUserId = userResponse?.user_id?.toString();
+                } catch (err) {
+                    console.warn("Backend user registration failed:", err);
+                }
 
-            const activeUserId = userResponse?.user_id || 1;
+                // If backend failed or returned nothing, generate a unique device ID
+                // Format: device_<timestamp>_<random> - guaranteed unique per device
+                if (!activeUserId) {
+                    const timestamp = Date.now();
+                    const random = Math.random().toString(36).substring(2, 10);
+                    activeUserId = `device_${timestamp}_${random}`;
+                    console.log("[Setup] Generated local device ID:", activeUserId);
+                }
+            }
 
             // 3. store profile, goals, AND the unique user_id
             await AsyncStorage.multiSet([

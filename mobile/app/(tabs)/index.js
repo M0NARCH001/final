@@ -65,8 +65,11 @@ export default function Home() {
 
     async function bootstrap() {
         const g = await AsyncStorage.getItem("nutrimate_goals");
+        const uid = await AsyncStorage.getItem("user_id");
 
-        if (!g) {
+        // Redirect to setup if either goals OR user_id is missing
+        // This prevents falling back to user_id: 1 and seeing old logs
+        if (!g || !uid) {
             router.replace("/setup");
             return;
         }

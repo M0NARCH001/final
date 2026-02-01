@@ -41,8 +41,10 @@ export default function RecommendationsScreen() {
         try {
             const profile = await AsyncStorage.getItem("nutrimate_profile");
             const goals = await AsyncStorage.getItem("nutrimate_goals");
+            const uidStr = await AsyncStorage.getItem("user_id");
 
-            if (!profile || !goals) {
+            // Require all three to be present - prevents fallback to user_id: 1
+            if (!profile || !goals || !uidStr) {
                 Alert.alert("Setup missing", "Please complete setup first.");
                 router.replace("/setup");
                 return;
@@ -50,8 +52,7 @@ export default function RecommendationsScreen() {
 
             const plan = JSON.parse(goals);
             const profileData = JSON.parse(profile);
-            const uidStr = await AsyncStorage.getItem("user_id");
-            const uid = uidStr ? parseInt(uidStr) : 1;
+            const uid = parseInt(uidStr);
 
             const logs = await API.getTodayLogs(uid) || [];
 
