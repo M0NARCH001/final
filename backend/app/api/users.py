@@ -28,13 +28,38 @@ class UserIn(BaseModel):
     weight_kg: Optional[float] = None
     target_weight_kg: Optional[float] = None
     activity_level: Optional[str] = None
-    medical_conditions: Optional[str] = None
-    diet_preferences: Optional[str] = None
 
 
-class UserOut(UserIn):
+class UserOut(BaseModel):
     user_id: int
+    username: Optional[str] = None
+    name: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    target_weight_kg: Optional[float] = None
+    activity_level: Optional[str] = None
     created_at: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+        
+    @classmethod
+    def from_orm_with_str_date(cls, user):
+        """Convert User ORM object to UserOut with string date"""
+        return cls(
+            user_id=user.user_id,
+            username=user.username,
+            name=user.name,
+            age=user.age,
+            gender=user.gender,
+            height_cm=user.height_cm,
+            weight_kg=user.weight_kg,
+            target_weight_kg=user.target_weight_kg,
+            activity_level=user.activity_level,
+            created_at=str(user.created_at) if user.created_at else None,
+        )
 
 
 class UsernameCheck(BaseModel):
@@ -92,7 +117,7 @@ def register_user(payload: UserIn, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    return UserOut.from_orm_with_str_date(user)
 
 
 # ============================================================
@@ -103,7 +128,7 @@ def get_user_by_username(username: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username.strip().lower()).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return UserOut.from_orm_with_str_date(user)
 
 
 # Create user (legacy - for backward compatibility)
@@ -122,7 +147,7 @@ def create_user(payload: UserIn, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    return UserOut.from_orm_with_str_date(user)
 
 
 @router.get("/{user_id}", response_model=UserOut)
@@ -130,7 +155,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return UserOut.from_orm_with_str_date(user)
 
 
 @router.put("/{user_id}", response_model=UserOut)
@@ -143,4 +168,4 @@ def update_user(user_id: int, payload: UserIn, db: Session = Depends(get_db)):
             setattr(user, k, v)
     db.commit()
     db.refresh(user)
-    return user
+    return UserOut.from_orm_with_str_date(user)
