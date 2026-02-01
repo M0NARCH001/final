@@ -88,8 +88,6 @@ def register_user(payload: UserIn, db: Session = Depends(get_db)):
         weight_kg=payload.weight_kg,
         target_weight_kg=payload.target_weight_kg,
         activity_level=payload.activity_level,
-        medical_conditions=payload.medical_conditions,
-        diet_preferences=payload.diet_preferences,
     )
     db.add(user)
     db.commit()
@@ -120,8 +118,6 @@ def create_user(payload: UserIn, db: Session = Depends(get_db)):
         weight_kg=payload.weight_kg,
         target_weight_kg=payload.target_weight_kg,
         activity_level=payload.activity_level,
-        medical_conditions=payload.medical_conditions,
-        diet_preferences=payload.diet_preferences,
     )
     db.add(user)
     db.commit()
