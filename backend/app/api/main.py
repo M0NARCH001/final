@@ -276,6 +276,8 @@ def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db:
     results = q.limit(limit).all()
     out = []
     for f in results:
+        if f is None:  # Skip null results
+            continue
         try:
             subs = json.loads(f.subcategories_json) if f.subcategories_json else []
         except Exception:
