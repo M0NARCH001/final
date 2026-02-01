@@ -780,6 +780,14 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
         fat = f.Fats_g or 0
         carbs = f.Carbohydrates_g or 0
         sugar = f.FreeSugar_g or 0
+        
+        # Get food name for filtering
+        food_name = (f.food_name or "").lower()
+
+        # Skip condiments and premixes
+        excluded_terms = ["masala", "premix", "chutney", "pickle", "achar", "papad", "sauce"]
+        if any(term in food_name for term in excluded_terms):
+            continue
 
         # remove ultra-empty
         if kcal < 40:
