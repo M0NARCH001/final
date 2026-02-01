@@ -142,12 +142,62 @@ export default function ScannerScreen() {
     }
   }
 
-  // -------- Navigate to FoodLogScreen to add food --------
-  function goToAddFood() {
-    router.push({
-      pathname: "/(tabs)/FoodLogScreen",
-      params: { searchQuery: searchedName }
-    });
+  // -------- Add scanned product to database and log it --------
+  async function addToDbAndLog() {
+    if (!product) {
+      Alert.alert("No product", "Scan a product first.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const uid = await getUserId();
+      const nutrients = product.nutrients_per_100g || {};
+
+      // Create new food item from OpenFoodFacts data
+      const foodData = {
+        food_name: product.product_name || product.brands || "Unknown Product",
+        source: "OpenFoodFacts",
+        Calories_kcal: nutrients.Calories_kcal,
+        Protein_g: nutrients.Protein_g,
+        Carbohydrates_g: nutrients.Carbohydrates_g,
+        Fats_g: nutrients.Fats_g,
+        FreeSugar_g: nutrients.FreeSugar_g,
+        Fibre_g: nutrients.Fibre_g,
+        Sodium_mg: nutrients.Sodium_mg,
+        Calcium_mg: nutrients.Calcium_mg,
+        Iron_mg: nutrients.Iron_mg,
+        VitaminC_mg: nutrients.VitaminC_mg,
+        Folate_ug: nutrients.Folate_ug,
+        serving_size: product.serving_size,
+      };
+
+      // Create the food in database
+      const newFood = await API.createFood(foodData);
+      console.log("[Scanner] Created food:", newFood);
+
+      // Log it immediately
+      await API.addFoodLog({
+        user_id: uid,
+        food_id: newFood.food_id,
+        quantity: 1,
+      });
+
+      Alert.alert(
+        "Added to Database & Logged! ✓",
+        `"${foodData.food_name}" has been added to your food database and logged.`
+      );
+
+      // Clear the noMatch state
+      setNoMatch(false);
+      setProduct(null);
+      setBarcode("");
+    } catch (err) {
+      console.error("Add to DB failed:", err);
+      Alert.alert("Failed", String(err?.message || err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   // -------- Add matched food to log --------
@@ -300,13 +350,13 @@ export default function ScannerScreen() {
               "{searchedName}" is not in our database yet.
             </Text>
             <Text style={{ marginTop: 8, color: "#666" }}>
-              Go to Food Log to search and add foods manually.
+              Add this product from OpenFoodFacts to your database and log it.
             </Text>
             <TouchableOpacity
               style={[styles.btn, { marginTop: 12, backgroundColor: "#4CAF50" }]}
-              onPress={goToAddFood}
+              onPress={addToDbAndLog}
             >
-              <Text style={styles.btnText}>Go to Food Log →</Text>
+              <Text style={styles.btnText}>Add to Database & Log ✓</Text>
             </TouchableOpacity>
           </View>
         )}

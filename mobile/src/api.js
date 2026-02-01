@@ -80,6 +80,14 @@ async function searchFoods(query, limit = 20) {
   return request(`/foods?query=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
+async function createFood(foodData) {
+  // foodData should have: food_name, Calories_kcal, Protein_g, Carbohydrates_g, Fats_g, etc.
+  return request("/foods", {
+    method: "POST",
+    body: foodData,
+  });
+}
+
 // ---------------- LOGS ----------------
 
 async function addFoodLog(payload) {
@@ -188,6 +196,7 @@ const API = {
   computePlan,
 
   searchFoods,
+  createFood,
 
   computeGoals,
 
@@ -211,6 +220,7 @@ export {
   request,
   computePlan,
   searchFoods,
+  createFood,
   addFoodLog,
   getTodayLogs,
   deleteFoodLog,
