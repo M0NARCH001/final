@@ -773,6 +773,8 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
     clean = []
 
     for f in foods:
+        if f is None:  # Skip null items
+            continue
         kcal = f.Calories_kcal or 0
         protein = f.Protein_g or 0
         fat = f.Fats_g or 0
