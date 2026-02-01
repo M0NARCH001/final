@@ -100,6 +100,33 @@ def get_db():
     finally:
         db.close()
 
+
+# -----------------------
+# Database Migration (run once to add missing columns)
+# -----------------------
+@app.get("/migrate-db")
+def migrate_database():
+    """Add missing columns to existing tables (safe to run multiple times)"""
+    results = []
+    
+    try:
+        with engine.connect() as conn:
+            # Check if username column exists in user table
+            result = conn.execute("PRAGMA table_info(user)").fetchall()
+            columns = [row[1] for row in result]
+            
+            if "username" not in columns:
+                conn.execute("ALTER TABLE user ADD COLUMN username TEXT")
+                results.append("Added 'username' column to user table")
+            else:
+                results.append("'username' column already exists")
+            
+            conn.commit()
+        
+        return {"status": "success", "changes": results}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # -----------------------
 # Request models
 # -----------------------

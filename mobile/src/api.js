@@ -35,6 +35,7 @@ async function computeGoals(payload) {
 }
 async function request(path, opts = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  console.log("[API] Calling:", opts.method || "GET", url);
 
   const cfg = {
     headers: { "Content-Type": "application/json" },
@@ -45,16 +46,22 @@ async function request(path, opts = {}) {
     cfg.body = JSON.stringify(cfg.body);
   }
 
-  const res = await fetch(url, cfg);
+  try {
+    const res = await fetch(url, cfg);
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${txt}`);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      console.error("[API] Error response:", res.status, txt);
+      throw new Error(`HTTP ${res.status}: ${txt}`);
+    }
+
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) return res.json();
+    return res.text();
+  } catch (err) {
+    console.error("[API] Fetch failed:", url, err.message);
+    throw err;
   }
-
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return res.json();
-  return res.text();
 }
 
 // ---------------- SETUP / COMPUTE ----------------

@@ -128,7 +128,8 @@ export default function SetupScreen() {
                     }
                 } catch (err) {
                     console.error("Username check/register failed:", err);
-                    alert("Could not verify username. Please check your connection.");
+                    const errorMsg = err?.message || JSON.stringify(err);
+                    alert(`Could not verify username.\n\nError: ${errorMsg}\n\nMake sure backend is running.`);
                     return;
                 }
             }
