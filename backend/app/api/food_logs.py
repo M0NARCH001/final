@@ -72,9 +72,22 @@ def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
         cooking_method=payload.cooking_method,
     )
     db.add(entry)
+    db.flush()  # Get generated log_id
+    
+    # Capture result before commit
+    result = FoodLogOut(
+        log_id=entry.log_id,
+        user_id=entry.user_id,
+        food_id=entry.food_id,
+        quantity=entry.quantity,
+        unit=entry.unit,
+        portion_g_cooked=entry.portion_g_cooked,
+        cooking_method=entry.cooking_method,
+        logged_at=entry.logged_at,
+    )
+    
     db.commit()
-    db.refresh(entry)
-    return entry
+    return result
 
 
 # ============================================================
