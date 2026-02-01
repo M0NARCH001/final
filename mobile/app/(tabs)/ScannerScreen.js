@@ -154,8 +154,9 @@ export default function ScannerScreen() {
       const uid = await getUserId();
       const nutrients = product.nutrients_per_100g || {};
 
-      // Create new food item from OpenFoodFacts data
-      const foodData = {
+      // Combined call: Create food AND log it in one transaction
+      const result = await API.createFoodAndLog({
+        // Food data
         food_name: product.product_name || product.brands || "Unknown Product",
         source: "OpenFoodFacts",
         Calories_kcal: nutrients.Calories_kcal,
@@ -170,22 +171,17 @@ export default function ScannerScreen() {
         VitaminC_mg: nutrients.VitaminC_mg,
         Folate_ug: nutrients.Folate_ug,
         serving_size: product.serving_size,
-      };
-
-      // Create the food in database
-      const newFood = await API.createFood(foodData);
-      console.log("[Scanner] Created food:", newFood);
-
-      // Log it immediately
-      await API.addFoodLog({
+        // Log data
         user_id: uid,
-        food_id: newFood.food_id,
         quantity: 1,
+        unit: "serving",
       });
+
+      console.log("[Scanner] Created and logged:", result);
 
       Alert.alert(
         "Added to Database & Logged! ✓",
-        `"${foodData.food_name}" has been added to your food database and logged.`
+        `"${result.food_name}" has been added to your food database and logged.`
       );
 
       // Clear the noMatch state

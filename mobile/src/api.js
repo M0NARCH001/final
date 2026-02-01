@@ -88,6 +88,15 @@ async function createFood(foodData) {
   });
 }
 
+async function createFoodAndLog(foodData) {
+  // Combined endpoint: creates food AND logs it in one transaction
+  // foodData should include: food_name, user_id, quantity, and nutrition fields
+  return request("/foods/create-and-log", {
+    method: "POST",
+    body: foodData,
+  });
+}
+
 // ---------------- LOGS ----------------
 
 async function addFoodLog(payload) {
@@ -197,6 +206,7 @@ const API = {
 
   searchFoods,
   createFood,
+  createFoodAndLog,
 
   computeGoals,
 
