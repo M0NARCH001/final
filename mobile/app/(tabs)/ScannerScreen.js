@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { useRouter } from "expo-router";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -22,10 +23,13 @@ import {
 import API from "../../src/api";
 
 export default function ScannerScreen() {
+  const router = useRouter();
   const [barcode, setBarcode] = useState("");
   const [loading, setLoading] = useState(false);
   const [product, setProduct] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [noMatch, setNoMatch] = useState(false);
+  const [searchedName, setSearchedName] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanned, setScanned] = useState(false);
 
@@ -118,17 +122,32 @@ export default function ScannerScreen() {
 
     setLoading(true);
     setMatches([]);
+    setNoMatch(false);
 
     try {
       const clean = name.split(",")[0].slice(0, 40);
+      setSearchedName(clean);
       console.log("[Scanner] searching NutriMate for:", clean);
       const results = await API.searchFoods(clean);
-      setMatches(results || []);
+
+      if (!results || results.length === 0) {
+        setNoMatch(true);
+      } else {
+        setMatches(results);
+      }
     } catch (err) {
       Alert.alert("Match failed", String(err?.message || err));
     } finally {
       setLoading(false);
     }
+  }
+
+  // -------- Navigate to FoodLogScreen to add food --------
+  function goToAddFood() {
+    router.push({
+      pathname: "/(tabs)/FoodLogScreen",
+      params: { searchQuery: searchedName }
+    });
   }
 
   // -------- Add matched food to log --------
@@ -271,6 +290,24 @@ export default function ScannerScreen() {
                 </TouchableOpacity>
               </View>
             ))}
+          </View>
+        )}
+
+        {noMatch && (
+          <View style={styles.card}>
+            <Text style={styles.title}>No matches found</Text>
+            <Text style={styles.sub}>
+              "{searchedName}" is not in our database yet.
+            </Text>
+            <Text style={{ marginTop: 8, color: "#666" }}>
+              Go to Food Log to search and add foods manually.
+            </Text>
+            <TouchableOpacity
+              style={[styles.btn, { marginTop: 12, backgroundColor: "#4CAF50" }]}
+              onPress={goToAddFood}
+            >
+              <Text style={styles.btnText}>Go to Food Log →</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>

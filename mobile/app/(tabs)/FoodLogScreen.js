@@ -10,14 +10,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
+import { useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../../src/api";
 
 export default function FoodLogScreen() {
+  const { searchQuery } = useLocalSearchParams();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Auto-fill and search when navigating from ScannerScreen
+  useEffect(() => {
+    if (searchQuery) {
+      setQuery(searchQuery);
+      // Trigger search after setting query
+      searchWithQuery(searchQuery);
+    }
+  }, [searchQuery]);
 
   async function getUserId() {
     const uid = await AsyncStorage.getItem("user_id");
@@ -41,8 +52,13 @@ export default function FoodLogScreen() {
 
   async function search() {
     if (!query) return;
+    searchWithQuery(query);
+  }
+
+  async function searchWithQuery(q) {
+    if (!q) return;
     setLoading(true);
-    const r = await API.searchFoods(query);
+    const r = await API.searchFoods(q);
     setResults(r || []);
     setLoading(false);
   }
