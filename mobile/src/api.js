@@ -177,6 +177,7 @@ function formatISODate(dt = new Date()) {
 // ---------------- EXPORTS ----------------
 
 const API = {
+  request,
   computePlan,
 
   searchFoods,

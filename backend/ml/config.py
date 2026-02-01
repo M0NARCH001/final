@@ -5,7 +5,14 @@ from logging.handlers import RotatingFileHandler
 
 # ─── Paths & Constants ────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_DIR = os.path.join(BASE_DIR, "ml_artifacts")
+
+# Use Railway persistent volume if available, otherwise local
+RAILWAY_VOLUME = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+if RAILWAY_VOLUME:
+    MODEL_DIR = os.path.join(RAILWAY_VOLUME, "ml_artifacts")
+else:
+    MODEL_DIR = os.path.join(BASE_DIR, "ml_artifacts")
+
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 MODEL_PATH      = os.path.join(MODEL_DIR, "rf_recommender.joblib")

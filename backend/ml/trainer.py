@@ -118,6 +118,13 @@ def train_model(db: Session):
 
         load_model_and_scaler()     # refresh globals
 
+        # Push to GitHub
+        try:
+            from .git_push import push_model_to_github
+            push_model_to_github(auc_score=auc, n_samples=len(X))
+        except Exception as e:
+            logger.warning(f"GitHub push failed (non-fatal): {e}")
+
         return True, "trained"
 
     except Exception as e:

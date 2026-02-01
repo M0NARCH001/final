@@ -49,6 +49,7 @@ export default function RecommendationsScreen() {
             }
 
             const plan = JSON.parse(goals);
+            const profileData = JSON.parse(profile);
             const uidStr = await AsyncStorage.getItem("user_id");
             const uid = uidStr ? parseInt(uidStr) : 1;
 
