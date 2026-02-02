@@ -9,6 +9,7 @@ A **personalized nutrition tracking and intelligence system** that not only trac
 - **Support for Health Conditions**: Personalized targets and warnings for **Diabetes, Hypertension, PCOS, Muscle Gain, and Heart Health**
 - **Hybrid ML Recommendations**: A smart engine that blends hand-written nutritional rules with a **RandomForest ML model** that learns from your preferences
 - **Smart Warnings**: Instant alerts if your sugar/sodium is too high or if you're missing critical minerals
+- **BMR/TDEE Calculation**: Automatic calorie target calculation based on biometrics and activity level
 
 ### New in v2.1
 - **Username-Based Authentication**: Login with username across devices (no password required)
@@ -19,12 +20,34 @@ A **personalized nutrition tracking and intelligence system** that not only trac
 
 ---
 
+## 🧠 Hybrid ML Recommendation Engine
+
+The system uses a **Phased Rollout** strategy for intelligence:
+
+| Phase | Condition | Behavior |
+|-------|-----------|----------|
+| **Phase 0 (Day 1)** | < 80 impressions | 100% rule-based scoring. Collects "silent" data on which foods you log. |
+| **Phase 1** | ≥ 80 impressions + ≥ 15 accepts | Automatically trains RandomForest model in the background |
+| **Phase 2 (Ongoing)** | Model trained | **70% nutritional rules + 30% ML** hybrid scoring for personalized suggestions |
+
+### Training Parameters
+- **MIN_IMPRESSIONS**: 80 (minimum data points before training)
+- **MIN_ACCEPTS**: 15 (minimum accepted recommendations)
+- **MIN_HOURS_BETWEEN**: 6 (cooldown between retraining cycles)
+
+### Check ML Status
+```bash
+curl https://your-backend.railway.app/ml/status
+```
+
+---
+
 ## 🏗 Architecture
 
 NutriMate v2 uses a robust client-server architecture designed for serverless or persistent environments.
 
 ### Frontend (Expo / React Native)
-- **Dashboard**: High-level macro & micro progress bars with health warnings
+- **Dashboard**: Circular calorie progress, macro/micro progress bars, health warnings
 - **Setup**: Smart onboarding with username registration, biometric input, and health condition selection
 - **Scanner**: Barcode scanner with OpenFoodFacts integration and auto-database-add feature
 - **Food Log**: Search and log foods from IFCT (Indian) and USDA (Global) databases
@@ -32,39 +55,52 @@ NutriMate v2 uses a robust client-server architecture designed for serverless or
 
 ### Backend (FastAPI + ML Layer)
 - **API Core**: FastAPI handling nutrition logic, user management, and food logging
-- **User Management**: Username-based registration and lookup (`/users/check-username`, `/users/register`)
-- **Food Management**: Search, create, and combined create-and-log endpoints (`/foods/create-and-log`)
-- **ML Layer (`/ml`)**: 
-  - `predictor.py`: Hybrid scoring (70% rules / 30% ML)
+- **User Management**: Username-based registration and lookup
+- **Food Management**: Search, create, and combined create-and-log endpoints
+- **ML Layer**: 
+  - `predictor.py`: Hybrid scoring (70% rules / 30% ML probability)
   - `trainer.py`: Automated background training using RandomForest
-  - `config.py`: Centralized ML constants and logging
+  - `config.py`: Centralized ML constants, paths, and logging
+- **Impressions System**: Tracks user interactions with recommendations for ML training
 - **DB (SQLite)**: Persistent storage for food logs, user profiles, and ML training data
 
 ---
 
 ## 📱 Mobile App Flow
 
-1. **Onboarding**: 
-   - Enter a unique username (used for cross-device access)
-   - Input biometrics (age, height, weight, activity level)
-   - Select health conditions (Diabetes, Hypertension, PCOS, etc.)
-   - Auto-calculated nutritional targets based on BMR/TDEE
+### 1. Onboarding
+- Enter a unique username (used for cross-device access)
+- Input biometrics: age, height, weight, gender
+- Select activity level (sedentary to very active)
+- Select health conditions (Diabetes, Hypertension, PCOS, etc.)
+- **Auto-calculated nutritional targets** based on BMR/TDEE formulas
 
-2. **Daily Tracking**: 
-   - Search and log foods from 1000+ items (IFCT + USDA)
-   - Scan barcodes to find products instantly
-   - Dashboard shows live progress with color-coded bars
+### 2. Dashboard
+- **Circular calorie progress** with color-coded status
+- **Macro bars**: Protein, Carbs, Fats with % completion
+- **Micro bars**: Fiber, Iron, Calcium, Vitamin C, Folate, Sodium, Sugar
+- **Smart warnings**: Yellow (high sugar/sodium), Blue (mineral deficits)
+- **Today's food log** with delete capability
 
-3. **Barcode Scanning**:
-   - Scan any product barcode
-   - Lookup on OpenFoodFacts API
-   - Find matching food in NutriMate database OR
-   - **Add new product to database** with one tap
+### 3. Food Logging
+- Search 1000+ foods from IFCT + USDA databases
+- Instant results with nutritional preview
+- Log with quantity adjustment
+- Scan barcodes for quick product lookup
 
-4. **Smart Recommendations**: 
-   - Backend calculates current deficits
-   - Scores foods based on nutritional gaps + ML preferences
-   - Excludes junk food and condiments automatically
+### 4. Barcode Scanning
+- Scan any product barcode
+- Lookup on OpenFoodFacts API (global product database)
+- Match with NutriMate database OR
+- **Add new product to database** with one tap
+- Extracts: Calories, Protein, Carbs, Fats, Sugar, Fiber, Sodium, Calcium, Iron, Vitamin C, Folate
+
+### 5. Smart Recommendations
+- Backend calculates current deficits vs targets
+- Scores foods based on nutritional gaps + ML preferences
+- Excludes junk food and condiments automatically
+- Shows reasoning badges (e.g., "High Protein", "Low Sodium")
+- Records impressions for future ML training
 
 ---
 
@@ -74,7 +110,7 @@ NutriMate v2 uses a robust client-server architecture designed for serverless or
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/users/check-username` | POST | Check if username exists, returns user_id if found |
-| `/users/register` | POST | Register new user with username |
+| `/users/register` | POST | Register new user with username and profile |
 | `/users/by-username/{username}` | GET | Get user by username |
 | `/users/{user_id}` | GET/PUT | Get or update user profile |
 
@@ -89,7 +125,7 @@ NutriMate v2 uses a robust client-server architecture designed for serverless or
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/food-logs` | POST | Log a food item |
-| `/food-logs/today` | GET | Get today's food logs |
+| `/food-logs/today` | GET | Get today's food logs with nutritional data |
 | `/food-logs/{log_id}` | DELETE | Delete a food log |
 
 ### Intelligence
@@ -97,7 +133,20 @@ NutriMate v2 uses a robust client-server architecture designed for serverless or
 |----------|--------|-------------|
 | `/daily-summary` | POST | Get nutritional summary for a day |
 | `/recommendations/generate` | POST | Get personalized food recommendations |
-| `/compute` | POST | Calculate nutritional targets |
+| `/compute` | POST | Calculate nutritional targets based on biometrics |
+
+### ML & Training
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ml/status` | GET | Get ML model status and training statistics |
+| `/impressions/batch` | POST | Log recommendation impressions for ML training |
+| `/impressions/{id}/mark-added` | PUT | Mark impression as accepted (user logged food) |
+
+### Utilities
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check endpoint |
+| `/migrate-db` | GET | Run database migrations |
 
 ---
 
@@ -107,7 +156,7 @@ NutriMate v2 uses a robust client-server architecture designed for serverless or
 |-----------|------------|
 | **Mobile** | Expo (React Native), Expo Router, Expo Camera, AsyncStorage |
 | **API** | FastAPI, Uvicorn, Pydantic |
-| **ML** | Scikit-Learn (RandomForest), Joblib, NumPy |
+| **ML** | Scikit-Learn (RandomForest), Joblib, NumPy, StandardScaler |
 | **Database** | SQLite + SQLAlchemy ORM |
 | **External APIs** | OpenFoodFacts (barcode lookup) |
 | **Deployment** | Railway (Backend), Expo EAS (Mobile) |
@@ -143,6 +192,7 @@ npx expo start
 - Uses `railway.json` and a `/data` volume for persistent SQLite storage
 - Variables needed: `RAILWAY_VOLUME_MOUNT_PATH=/data`
 - Database migrations: Visit `/migrate-db` endpoint after deploying new schema changes
+- ML artifacts persist in `/data/ml_artifacts/`
 
 ### Expo EAS (Mobile)
 ```bash
@@ -168,10 +218,11 @@ Nutrimate-v2/
 │   │   │   └── food_logs.py     # Food logging
 │   │   ├── db/
 │   │   │   └── database.py      # SQLAlchemy setup
-│   │   ├── ml/
-│   │   │   ├── predictor.py     # Hybrid ML scoring
-│   │   │   └── trainer.py       # Model training
 │   │   └── models.py            # SQLAlchemy models
+│   ├── ml/
+│   │   ├── config.py            # ML constants & logging
+│   │   ├── predictor.py         # Hybrid ML scoring
+│   │   └── trainer.py           # Auto-retraining logic
 │   └── requirements.txt
 ├── mobile/
 │   ├── app/
@@ -179,8 +230,11 @@ Nutrimate-v2/
 │   │   │   ├── index.js         # Dashboard
 │   │   │   ├── FoodLogScreen.js # Food logging
 │   │   │   ├── ScannerScreen.js # Barcode scanner
-│   │   │   └── ...
+│   │   │   └── RecommendScreen.js
 │   │   └── setup.js             # User onboarding
+│   ├── components/
+│   │   ├── CalorieProgressCircle.js
+│   │   └── ...
 │   ├── src/
 │   │   ├── api.js               # API client
 │   │   └── openfood.js          # OpenFoodFacts client
@@ -196,9 +250,13 @@ All core v2 features are implemented:
 - ✅ Username-based authentication
 - ✅ Barcode scanning with OpenFoodFacts
 - ✅ Auto-add scanned products to database
-- ✅ Hybrid ML recommendations
-- ✅ Health condition support
-- ✅ Micronutrient tracking
+- ✅ Hybrid ML recommendations with phased rollout
+- ✅ Automatic background model retraining
+- ✅ Health condition support (Diabetes, PCOS, Hypertension, etc.)
+- ✅ Micronutrient tracking (11 nutrients)
+- ✅ BMR/TDEE-based calorie targets
+- ✅ Smart warnings system
+- ✅ Condiment filtering in recommendations
 
 The architecture supports 10,000+ food items with sub-second recommendation latency.
 
