@@ -262,6 +262,158 @@ The architecture supports 10,000+ food items with sub-second recommendation late
 
 ---
 
+## 📐 How It Works: Formulas & Algorithms
+
+### 1. BMR Calculation (Mifflin-St Jeor Equation)
+
+The **Basal Metabolic Rate** is calculated based on gender:
+
+```
+Male:   BMR = (10 × weight_kg) + (6.25 × height_cm) - (5 × age) + 5
+Female: BMR = (10 × weight_kg) + (6.25 × height_cm) - (5 × age) - 161
+```
+
+### 2. TDEE Calculation (Total Daily Energy Expenditure)
+
+```
+TDEE = BMR × Activity Multiplier
+```
+
+| Activity Level | Multiplier |
+|----------------|------------|
+| Low (Sedentary) | 1.2 |
+| Moderate | 1.55 |
+| High (Very Active) | 1.75 |
+
+### 3. Goal-Based Calorie Adjustment
+
+**Weight Loss:**
+```
+Total Deficit = (Current Weight - Target Weight) × 7700 kcal/kg
+Daily Calories = TDEE - (Total Deficit / Days)
+```
+
+**Weight Gain:**
+```
+Total Surplus = (Target Weight - Current Weight) × 7700 kcal/kg
+Daily Calories = TDEE + (Total Surplus / Days)
+```
+
+*Minimum daily calories clamped at 1200 kcal for safety.*
+
+### 4. Macronutrient Distribution
+
+**Protein:**
+```
+Base:        Protein = Weight × 1.6 g/kg
+Weight Gain: Protein = Weight × 2.0 g/kg
+Muscle Focus: Protein = Weight × 2.2 g/kg
+```
+
+**Carbohydrates:**
+```
+Default:        50% of calories
+Diabetes/PCOS:  40% of calories (lower for blood sugar control)
+```
+
+**Fats:**
+```
+Default:       25% of calories
+Heart Health:  30% of calories (emphasis on healthy fats)
+
+Fat (g) = (Daily Calories × Fat %) / 9
+Carbs (g) = (Remaining Calories) / 4  [min 50g]
+```
+
+### 5. Micronutrient Targets (RDA-Based)
+
+| Nutrient | Male | Female | Condition Adjustment |
+|----------|------|--------|---------------------|
+| **Fiber** | 30g | 25g | - |
+| **Sugar** | 10% of calories | 10% of calories | Diabetes/PCOS: max 25g |
+| **Sodium** | 2300mg | 2300mg | Hypertension: 2000mg |
+| **Iron** | 8mg | 18mg | - |
+| **Calcium** | 1000mg | 1000mg | - |
+| **Vitamin C** | 90mg | 75mg | - |
+| **Folate** | 400μg | 400μg | - |
+
+### 6. Food Recommendation Scoring Algorithm
+
+Each food gets a **rule-based score** calculated as:
+
+```python
+score = 0
+
+# Macronutrient scoring (based on current deficits)
+score += min(food.calories, deficit.calories) × 0.2
+score += min(food.protein, deficit.protein) × 4.0   # Protein is king
+score += min(food.carbs, deficit.carbs) × 1.0
+score += min(food.fat, deficit.fat) × 0.5
+
+# Micronutrient bonuses
+if food.fiber >= 3g:  score += 10
+if food.sugar < 5g:   score += 8
+if food.sodium < 200mg: score += 5
+
+# Iron/Calcium/VitC deficit matching
+score += iron_contribution × 2
+score += calcium_contribution × 3
+score += vitC_contribution × 0.5
+
+# Penalties
+if food.fat > 20g:    score -= fat × 2
+if junk_food_name:    score -= 80
+
+# Condition-based penalties
+if (diabetes OR pcos) AND carbs > 30g:   score -= 30
+if (diabetes OR pcos) AND sugar > 10g:   score -= 25
+if (hypertension) AND sodium > 400mg:    score -= 25
+
+# Preferred foods bonus
+if name contains ["paneer","egg","dal","chicken","curd","fish"]: score += 20
+```
+
+### 7. Hybrid ML Scoring (After Training)
+
+Once the ML model is trained (≥80 impressions):
+
+```python
+# ML model predicts probability of user accepting food
+ml_probability = model.predict_proba(features)[1]
+
+# Hybrid score: 70% rules + 30% ML
+final_score = (0.70 × rule_score) + (0.30 × ml_probability × 100)
+```
+
+**ML Features (10 dimensions):**
+```python
+features = [
+    deficit.calories / 500,
+    deficit.protein / 100,
+    deficit.fat / 80,
+    deficit.carbs / 200,
+    food.calories / 500,
+    food.protein / 30,
+    food.fat / 20,
+    food.carbs / 60,
+    display_rank / 10,
+    rule_score / 100
+]
+```
+
+### 8. Food Filtering (Exclusions)
+
+Foods automatically excluded from recommendations:
+- **Ultra-low calorie**: < 40 kcal
+- **Sugar bombs**: Carbs > 40g AND Protein < 5g AND Sugar > 15g
+- **Pure fat**: Fat > 20g AND Protein < 5g
+- **Condiments**: Contains "masala", "premix", "chutney", "pickle", "achar", "papad", "sauce"
+- **Junk foods**: Contains "burfi", "laddu", "halwa", "cake", "sweet", "pudding", "pastry", "cookie"
+- **Diabetes restriction**: Carbs > 50g (when has_diabetes or has_pcos)
+
+---
+
 ## 📄 License
 
 MIT License - Feel free to use and modify for your own projects.
+
