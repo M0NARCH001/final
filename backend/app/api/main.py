@@ -323,24 +323,6 @@ def debug_db(db: Session = Depends(get_db)):
         conn.close()
     return out
 
-@app.delete("/cleanup-foods")
-def cleanup_foods(name_pattern: str = Query(...), db: Session = Depends(get_db)):
-    """Delete foods matching a name pattern (case-insensitive)"""
-    conn = db.connection().engine.raw_connection()
-    cursor = conn.cursor()
-    try:
-        # First count how many will be deleted
-        cursor.execute("SELECT count(*) FROM food_items WHERE food_name LIKE ? COLLATE NOCASE", (f"%{name_pattern}%",))
-        count = cursor.fetchone()[0]
-        
-        # Delete matching foods
-        cursor.execute("DELETE FROM food_items WHERE food_name LIKE ? COLLATE NOCASE", (f"%{name_pattern}%",))
-        conn.commit()
-        
-        return {"deleted": count, "pattern": name_pattern}
-    finally:
-        cursor.close()
-
 @app.get("/foods")
 def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db: Session = Depends(get_db)):
     q = db.query(FoodItem)
