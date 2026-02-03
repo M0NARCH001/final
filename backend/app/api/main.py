@@ -268,12 +268,41 @@ def find_rda_row(db: Session, requested: str):
 # -----------------------
 # Search endpoint
 # -----------------------
+@app.get("/foods/{food_id}")
+def get_food(food_id: int, db: Session = Depends(get_db)):
+    f = db.query(FoodItem).filter(FoodItem.food_id == food_id).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="Food not found")
+    
+    try:
+        subs = json.loads(f.subcategories_json) if f.subcategories_json else []
+    except Exception:
+        subs = []
+        
+    return {
+        "food_id": f.food_id,
+        "food_name": f.food_name,
+        "main_name": f.main_name,
+        "subcategories": subs if subs else None,
+        "source": f.source,
+        "Calories_kcal": f.Calories_kcal,
+        "Protein_g": f.Protein_g,
+        "Carbohydrates_g": f.Carbohydrates_g,
+        "Fats_g": f.Fats_g,
+        "FreeSugar_g": f.FreeSugar_g,
+        "Fibre_g": f.Fibre_g,
+        "Sodium_mg": f.Sodium_mg
+    }
+
 @app.get("/foods")
 def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db: Session = Depends(get_db)):
     q = db.query(FoodItem)
     if query:
+        # Safer case-insensitive search for SQLite
         q = q.filter(FoodItem.food_name.ilike(f"%{query}%"))
-    results = q.limit(limit).all()
+    
+    # Sort by ID desc to show newest (user-added) items first
+    results = q.order_by(FoodItem.food_id.desc()).limit(limit).all()
     out = []
     for f in results:
         if f is None:  # Skip null results
