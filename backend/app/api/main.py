@@ -426,10 +426,20 @@ def report_today(user_id: Optional[int] = Query(None), db: Session = Depends(get
 
 @app.get("/food-logs/today")
 def get_today_logs(user_id: int, db: Session = Depends(get_db)):
+    # Get today's date range (UTC to match server timestamps)
+    from datetime import datetime, time, timedelta
+    
+    # Use UTC since Railway servers store in UTC
+    today_utc = datetime.utcnow().date()
+    start_of_day = datetime.combine(today_utc, time.min)
+    end_of_day = datetime.combine(today_utc, time.max)
+    
     logs = (
         db.query(FoodLog, FoodItem)
         .join(FoodItem, FoodItem.food_id == FoodLog.food_id)
         .filter(FoodLog.user_id == user_id)
+        .filter(FoodLog.logged_at >= start_of_day)
+        .filter(FoodLog.logged_at <= end_of_day)
         .all()
     )
 
@@ -443,6 +453,7 @@ def get_today_logs(user_id: int, db: Session = Depends(get_db)):
             "food_id": food.food_id,
             "food_name": food.food_name,
             "quantity": qty,
+            "logged_at": str(log.logged_at) if log.logged_at else None,
             # Macros
             "Calories_kcal": round((food.Calories_kcal or 0) * qty, 2),
             "Protein_g": round((food.Protein_g or 0) * qty, 2),
