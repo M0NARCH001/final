@@ -323,6 +323,69 @@ def debug_db(db: Session = Depends(get_db)):
         conn.close()
     return out
 
+@app.post("/admin/deduplicate-foods")
+def deduplicate_foods(db: Session = Depends(get_db)):
+    """
+    Remove duplicate food items (same name case-insensitive).
+    Migrates any logs pointing to duplicates to the kept item (lowest ID).
+    """
+    # 1. Find duplicates
+    # Group by lowercase name
+    count_col = func.count(FoodItem.food_id)
+    name_col = func.lower(FoodItem.food_name)
+    
+    dupes = (
+        db.query(name_col, count_col)
+        .group_by(name_col)
+        .having(count_col > 1)
+        .all()
+    )
+    
+    deleted_count = 0
+    migrated_logs = 0
+    
+    for name_lower, count in dupes:
+        # Get all items with this name
+        items = (
+            db.query(FoodItem)
+            .filter(func.lower(FoodItem.food_name) == name_lower)
+            .order_by(FoodItem.food_id.asc())
+            .all()
+        )
+        
+        if not items:
+            continue
+            
+        # Keep the first one (lowest ID is usually original/seeded)
+        keep = items[0]
+        remove = items[1:]
+        
+        remove_ids = [i.food_id for i in remove]
+        
+        # 2. Update Logs pointing to removed items
+        logs_to_fix = (
+            db.query(FoodLog)
+            .filter(FoodLog.food_id.in_(remove_ids))
+            .all()
+        )
+        for log in logs_to_fix:
+            log.food_id = keep.food_id
+            migrated_logs += 1
+            
+        # 3. Delete duplicates
+        for item in remove:
+            db.delete(item)
+            deleted_count += 1
+            
+    db.commit()
+    
+    return {
+        "status": "success",
+        "duplicate_groups_found": len(dupes),
+        "items_deleted": deleted_count,
+        "logs_migrated": migrated_logs
+    }
+
 @app.get("/foods")
 def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db: Session = Depends(get_db)):
     q = db.query(FoodItem)
