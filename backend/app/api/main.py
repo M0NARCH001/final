@@ -294,6 +294,35 @@ def get_food(food_id: int, db: Session = Depends(get_db)):
         "Sodium_mg": f.Sodium_mg
     }
 
+@app.get("/debug-db")
+def debug_db(db: Session = Depends(get_db)):
+    """Inspect database state to debug persistence issues"""
+    conn = db.connection().engine.raw_connection()
+    cursor = conn.cursor()
+    out = {}
+    try:
+        # Check counts
+        cursor.execute("SELECT count(*) FROM food_items")
+        out["food_count"] = cursor.fetchone()[0]
+        cursor.execute("SELECT count(*) FROM food_log")
+        out["log_count"] = cursor.fetchone()[0]
+
+        # Check last foods
+        cursor.execute("SELECT food_id, food_name FROM food_items ORDER BY food_id DESC LIMIT 5")
+        out["last_foods"] = cursor.fetchall()
+        
+        # Check last logs
+        cursor.execute("SELECT log_id, food_id, user_id FROM food_log ORDER BY log_id DESC LIMIT 5")
+        out["last_logs"] = cursor.fetchall()
+
+        # Check schema
+        cursor.execute("PRAGMA table_info(food_items)")
+        out["schema_food_items"] = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+    return out
+
 @app.get("/foods")
 def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db: Session = Depends(get_db)):
     q = db.query(FoodItem)
