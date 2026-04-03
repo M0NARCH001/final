@@ -28,6 +28,7 @@ class UserIn(BaseModel):
     weight_kg: Optional[float] = None
     target_weight_kg: Optional[float] = None
     activity_level: Optional[str] = None
+    region: Optional[str] = "All India"
 
 
 class UserOut(BaseModel):
@@ -40,6 +41,7 @@ class UserOut(BaseModel):
     weight_kg: Optional[float] = None
     target_weight_kg: Optional[float] = None
     activity_level: Optional[str] = None
+    region: Optional[str] = None
     created_at: Optional[str] = None
     
     class Config:
@@ -58,6 +60,7 @@ class UserOut(BaseModel):
             weight_kg=user.weight_kg,
             target_weight_kg=user.target_weight_kg,
             activity_level=user.activity_level,
+            region=user.region,
             created_at=str(user.created_at) if user.created_at else None,
         )
 
@@ -113,6 +116,7 @@ def register_user(payload: UserIn, db: Session = Depends(get_db)):
         weight_kg=payload.weight_kg,
         target_weight_kg=payload.target_weight_kg,
         activity_level=payload.activity_level,
+        region=payload.region,
     )
     db.add(user)
     db.commit()
@@ -143,6 +147,7 @@ def create_user(payload: UserIn, db: Session = Depends(get_db)):
         weight_kg=payload.weight_kg,
         target_weight_kg=payload.target_weight_kg,
         activity_level=payload.activity_level,
+        region=payload.region,
     )
     db.add(user)
     db.commit()

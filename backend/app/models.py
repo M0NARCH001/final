@@ -9,9 +9,18 @@ from sqlalchemy import (
     Boolean,
 )
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
+
+# ---------------- Regions ----------------
+class Region(Base):
+    __tablename__ = "regions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
 
 
 # ---------------- Users ----------------
@@ -43,6 +52,10 @@ class User(Base):
     muscle_gain_focus = Column(Boolean, default=False)
     heart_health_focus = Column(Boolean, default=False)
 
+    region = Column(String, default="All India", nullable=True) # Text based legacy column
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=True)
+    region_rel = relationship("Region")
+
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -56,6 +69,14 @@ class FoodItem(Base):
     main_name = Column(String, index=True)
     subcategories_json = Column(Text, nullable=True)
     source = Column(String, nullable=True)
+
+    region = Column(String, nullable=True) # Legacy
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=True)
+    region_rel = relationship("Region")
+    
+    cuisine_type = Column(String, nullable=True)
+    serving_unit = Column(String, nullable=True)
+    serving_weight_g = Column(Float, nullable=True)
 
     Calories_kcal = Column(Float, nullable=True)
     Carbohydrates_g = Column(Float, nullable=True)
@@ -104,6 +125,10 @@ class FoodLog(Base):
     unit = Column(String, nullable=True)
     cooking_method = Column(String, nullable=True)
     portion_g_cooked = Column(Float, nullable=True)
+    
+    grams_logged = Column(Float, nullable=True)
+    serving_unit_used = Column(String, nullable=True)
+    
     logged_at = Column(DateTime, server_default=func.now())
 
 

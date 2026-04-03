@@ -16,7 +16,13 @@ def extract_features(impression, food):
     if isinstance(d, str):
         import json
         d = json.loads(d)
-    
+    user_region = d.get('user_region', '')
+    # Prefer relational region, fall back to legacy string column
+    food_region_obj = getattr(food, 'region_rel', None)
+    food_region = food_region_obj.name if food_region_obj else getattr(food, 'region', '')
+    is_region_match = 1.0 if (user_region and food_region and user_region != 'All India' and user_region == food_region) else 0.0
+    has_specific_region = 1.0 if (food_region and food_region not in ('All India', 'Generic')) else 0.0
+
     return np.array([
         d.get('Calories_kcal',      0) / 500.0,
         d.get('Protein_g',          0) / 100.0,
@@ -28,6 +34,8 @@ def extract_features(impression, food):
         getattr(food, 'Carbohydrates_g', 0) /  60.0,
         getattr(impression, 'rank', 0)   /  10.0,
         (getattr(impression, 'rule_score', 0) or 0) / 100.0,
+        is_region_match,
+        has_specific_region
     ], dtype=np.float32)
 
 
@@ -35,7 +43,7 @@ def load_model_and_scaler():
     global MODEL, SCALER
     try:
         if not (os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH)):
-            logger.info("No trained model found → using rule-based only")
+            logger.info("No trained model found -> using rule-based only")
             MODEL = SCALER = None
             return False
 
@@ -45,7 +53,7 @@ def load_model_and_scaler():
         return True
 
     except Exception as e:
-        logger.error(f"Failed to load ML model: {str(e)} → fallback to rule-based")
+        logger.error(f"Failed to load ML model: {str(e)} -> fallback to rule-based")
         MODEL = SCALER = None
         return False
 

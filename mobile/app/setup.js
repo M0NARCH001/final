@@ -39,6 +39,9 @@ export default function SetupScreen() {
     const [muscleGainFocus, setMuscleGainFocus] = useState(false);
     const [heartHealthFocus, setHeartHealthFocus] = useState(false);
 
+    // Phase 5: Region Selection
+    const [region, setRegion] = useState("All India");
+
     async function saveProfile() {
         try {
             if (!username || !name || !age || !height || !weight) {
@@ -69,6 +72,7 @@ export default function SetupScreen() {
                 has_pcos: hasPcos,
                 muscle_gain_focus: muscleGainFocus,
                 heart_health_focus: heartHealthFocus,
+                region: region,
             };
 
             // 1. compute targets locally (via backend compute)
@@ -93,6 +97,7 @@ export default function SetupScreen() {
                             height_cm: payload.height_cm,
                             weight_kg: payload.weight_kg,
                             activity_level: payload.activity_level,
+                            region: payload.region,
                         }
                     });
                 } catch (err) {
@@ -118,6 +123,7 @@ export default function SetupScreen() {
                                 height_cm: payload.height_cm,
                                 weight_kg: payload.weight_kg,
                                 activity_level: payload.activity_level,
+                                region: payload.region,
                             }
                         });
                         activeUserId = registerResult.user_id.toString();
@@ -138,6 +144,7 @@ export default function SetupScreen() {
             await AsyncStorage.multiSet([
                 ["user_id", activeUserId.toString()],
                 ["username", usernameClean],
+                ["region", region],
                 ["nutrimate_profile", JSON.stringify(payload)],
                 ["nutrimate_goals", JSON.stringify(plan)],
             ]);
@@ -321,6 +328,23 @@ export default function SetupScreen() {
                         <Text style={styles.checkLabel}>Heart Health Focus</Text>
                     </TouchableOpacity>
 
+                    <Text style={styles.h2}>Regional Preferences</Text>
+                    <Text style={styles.hint}>This helps us recommend local dishes</Text>
+
+                    <View style={styles.regionContainer}>
+                        {["Andhra Pradesh", "Tamil Nadu", "Kerala", "Karnataka", "Maharashtra", "Punjab", "All India"].map((r) => (
+                            <TouchableOpacity
+                                key={r}
+                                onPress={() => setRegion(r)}
+                                style={[styles.regionChip, region === r && styles.regionChipActive]}
+                            >
+                                <Text style={region === r ? styles.regionChipTextActive : styles.regionChipText}>
+                                    {r}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
                     <TouchableOpacity style={styles.btn} onPress={saveProfile}>
                         <Text style={styles.btnText}>Continue</Text>
                     </TouchableOpacity>
@@ -433,5 +457,31 @@ const styles = StyleSheet.create({
     checkLabel: {
         fontSize: 15,
         color: "#333",
+    },
+    regionContainer: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        marginBottom: 10,
+    },
+    regionChip: {
+        borderWidth: 1,
+        borderColor: "#ccc",
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        marginRight: 8,
+        marginBottom: 8,
+        backgroundColor: "#f9f9f9",
+    },
+    regionChipActive: {
+        backgroundColor: "#34A853",
+        borderColor: "#34A853",
+    },
+    regionChipText: {
+        color: "#444",
+    },
+    regionChipTextActive: {
+        color: "white",
+        fontWeight: "600",
     },
 });

@@ -165,9 +165,16 @@ export default function RecommendationsScreen() {
                         )}
 
                         <View style={styles.cardFooter}>
-                            <Text style={styles.calories}>
-                                {Math.round(item.nutrients?.Calories_kcal || 0)} kcal
-                            </Text>
+                            <View style={styles.footerInfoRow}>
+                                <Text style={styles.calories}>
+                                    {Math.round(item.nutrients?.Calories_kcal || 0)} kcal
+                                </Text>
+                                {item.cuisine_type && item.cuisine_type !== "Generic" && (
+                                    <View style={styles.cuisineBadge}>
+                                        <Text style={styles.cuisineBadgeText}>{item.cuisine_type}</Text>
+                                    </View>
+                                )}
+                            </View>
                             <TouchableOpacity
                                 style={styles.btn}
                                 onPress={() => addFood(item)}
@@ -256,5 +263,21 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: "center",
         marginTop: 8,
+    },
+    footerInfoRow: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    cuisineBadge: {
+        backgroundColor: "#E8F5E9",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        marginLeft: 8,
+    },
+    cuisineBadgeText: {
+        color: "#2E7D32",
+        fontSize: 11,
+        fontWeight: "700",
     },
 });

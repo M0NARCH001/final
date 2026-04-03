@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import date, datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 import json, math, difflib, logging
 from app.api.auth import router as auth_router
@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 # DB and models
 from app.db.database import SessionLocal, engine
-from app.models import FoodItem, FoodLog, RDA, User, RecommendationImpression  # import classes directly
+from app.models import FoodItem, FoodLog, RDA, User, RecommendationImpression, Region  # import classes directly
 
 # ML components for hybrid recommendations
 try:
@@ -164,6 +164,7 @@ class RecommendationRequest(BaseModel):
     has_pcos: bool = False
     muscle_gain_focus: bool = False
     heart_health_focus: bool = False
+    user_region: str = "All India"
 
 # -----------------------
 # Nutrient keys
@@ -324,34 +325,76 @@ def debug_db(db: Session = Depends(get_db)):
     return out
 
 @app.get("/foods")
-def search_foods(query: Optional[str] = Query(None), limit: int = Query(10), db: Session = Depends(get_db)):
-    q = db.query(FoodItem)
-    if query:
-        # Safer case-insensitive search for SQLite
-        q = q.filter(FoodItem.food_name.ilike(f"%{query}%"))
-    
-    # Sort by ID desc to show newest (user-added) items first
-    results = q.order_by(FoodItem.food_id.desc()).limit(limit).all()
-    out = []
-    for f in results:
-        if f is None:  # Skip null results
-            continue
-        try:
-            subs = json.loads(f.subcategories_json) if f.subcategories_json else []
-        except Exception:
-            subs = []
-        out.append({
+def search_foods(query: Optional[str] = Query(None), limit: int = Query(20), db: Session = Depends(get_db)):
+    if not query:
+        return []
+
+    foods = db.query(FoodItem).options(joinedload(FoodItem.region_rel)).filter(
+        (FoodItem.food_name.ilike(f"%{query}%")) |
+        (FoodItem.subcategories_json.ilike(f"%{query}%"))
+    ).limit(limit).all()
+
+    results = []
+    for f in foods:
+        reg_str = f.region_rel.name if f.region_rel else getattr(f, "region", None)
+        results.append({
             "food_id": f.food_id,
             "food_name": f.food_name,
             "main_name": f.main_name,
-            "subcategories": subs if subs else None,
-            "source": f.source,
+            "serving_unit": f.serving_unit,
+            "serving_weight_g": f.serving_weight_g,
             "Calories_kcal": f.Calories_kcal,
             "Protein_g": f.Protein_g,
             "Carbohydrates_g": f.Carbohydrates_g,
-            "Fats_g": f.Fats_g
+            "Fats_g": f.Fats_g,
+            "region": reg_str,
+            "region_id": f.region_id,
+            "cuisine_type": f.cuisine_type,
         })
-    return out
+    return results
+
+# -----------------------
+# Regions
+# -----------------------
+@app.get("/regions")
+def list_regions(db: Session = Depends(get_db)):
+    """Return all regions from the normalised regions table."""
+    regions = db.query(Region).all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+        }
+        for r in regions
+    ]
+
+@app.get("/regions/{region_id}/foods")
+def get_foods_by_region(region_id: int, limit: int = Query(50), db: Session = Depends(get_db)):
+    """Return all food items belonging to a specific region."""
+    region = db.query(Region).filter(Region.id == region_id).first()
+    if not region:
+        raise HTTPException(status_code=404, detail="Region not found")
+
+    foods = db.query(FoodItem).filter(FoodItem.region_id == region_id).limit(limit).all()
+    return {
+        "region": {"id": region.id, "name": region.name, "description": region.description},
+        "count": len(foods),
+        "foods": [
+            {
+                "food_id": f.food_id,
+                "food_name": f.food_name,
+                "cuisine_type": f.cuisine_type,
+                "serving_unit": f.serving_unit,
+                "serving_weight_g": f.serving_weight_g,
+                "Calories_kcal": f.Calories_kcal,
+                "Protein_g": f.Protein_g,
+                "Carbohydrates_g": f.Carbohydrates_g,
+                "Fats_g": f.Fats_g,
+            }
+            for f in foods
+        ],
+    }
 
 # -----------------------
 # Health check
@@ -369,24 +412,7 @@ def read_root():
         "mobile_status": "Online"
     }
 
-# -----------------------
-# Add food log (simple)
-# -----------------------
-@app.post("/food-logs", status_code=201)
-def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
-    food = db.query(FoodItem).filter(FoodItem.food_id == payload.food_id).first()
-    if not food:
-        raise HTTPException(status_code=404, detail="Food not found")
-    entry = FoodLog(
-        user_id=payload.user_id,
-        food_id=payload.food_id,
-        quantity=payload.quantity,
-        unit=payload.unit
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return {"ok": True, "log_id": entry.log_id}
+
 
 # -----------------------
 # Daily report
@@ -634,12 +660,12 @@ def daily_summary(req: DailySummaryRequest, db: Session = Depends(get_db)):
     # Compute totals
     totals = {k: 0.0 for k in NUTS}
     for log, food in logs_rows:
-        qty = log.quantity or 1
+        multiplier = (log.grams_logged / 100.0) if log.grams_logged else (log.quantity or 1.0)
         for k in NUTS:
             val = getattr(food, k, None)
             if val is not None:
                 try:
-                    totals[k] += float(val) * qty
+                    totals[k] += float(val) * multiplier
                 except:
                     pass
     totals = {k: round(v, 2) for k, v in totals.items()}
@@ -808,10 +834,20 @@ def score_food(f, deficits, conditions=None):
         elif sodium > 200:
             score -= 10
 
-    # --- Preferred foods bonus ---
-    preferred = ["paneer","egg","dal","chicken","curd","rice","roti","channa","fish","tofu"]
-    if any(p in name for p in preferred):
+    # PREFERENCES BONUS
+    preferred = conditions.get("preferred_foods", [])
+    food_name_lower = (f.food_name or "").lower()
+    if any(p in food_name_lower for p in preferred):
         score += 20
+
+    # REGION BONUS
+    user_region = deficits.get("user_region", "All India")
+    food_region_obj = getattr(f, "region_rel", None)
+    food_region = food_region_obj.name if food_region_obj else getattr(f, "region", None)
+    
+    if user_region and user_region != "All India" and food_region == user_region:
+        score += 15
+        reasons.append("Local Cuisine")
 
     return (score, reasons)
 
@@ -832,11 +868,12 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
         "Iron_mg": max(0, targets.get("iron_mg", 18) - totals.get("Iron_mg", 0)),
         "Calcium_mg": max(0, targets.get("calcium_mg", 1000) - totals.get("Calcium_mg", 0)),
         "VitaminC_mg": max(0, targets.get("vitaminC_mg", 90) - totals.get("VitaminC_mg", 0)),
+        "user_region": conditions.get("user_region", "All India"),
     }
 
     logger.info(f"DEFICITS: {deficits}")
 
-    foods = db.query(FoodItem).all()
+    foods = db.query(FoodItem).options(joinedload(FoodItem.region_rel)).all()
 
     # ---- basic junk filter ----
     clean = []
@@ -914,6 +951,7 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
             "score": round(float(s), 2),
             "reason": reason_str,
             "suggested_portion_g": suggested_portion_g,
+            "cuisine_type": getattr(f, "cuisine_type", None),
             # Include nutrient highlights
             "nutrients": {
                 "Calories_kcal": round(f.Calories_kcal or 0, 1),
@@ -957,6 +995,7 @@ def recommendations_generate(req: RecommendationRequest, db: Session = Depends(g
         "has_pcos": req.has_pcos,
         "muscle_gain_focus": req.muscle_gain_focus,
         "heart_health_focus": req.heart_health_focus,
+        "user_region": req.user_region,
     }
 
     recs = generate_recs(db, totals, targets, conditions=conditions, max_items=5)

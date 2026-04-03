@@ -33,6 +33,8 @@ class FoodLogIn(BaseModel):
     unit: Optional[str] = "serving"
     portion_g_cooked: Optional[float] = None
     cooking_method: Optional[str] = None
+    custom_grams: Optional[float] = None
+    serving_unit: Optional[str] = None
 
 
 class FoodLogOut(BaseModel):
@@ -43,6 +45,8 @@ class FoodLogOut(BaseModel):
     unit: Optional[str]
     portion_g_cooked: Optional[float]
     cooking_method: Optional[str]
+    grams_logged: Optional[float] = None
+    serving_unit_used: Optional[str] = None
     logged_at: Optional[datetime]
 
     class Config:
@@ -63,6 +67,16 @@ def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
     if not exists:
         raise HTTPException(status_code=404, detail=f"Food id {payload.food_id} not found")
 
+    # Calculate grams_logged
+    grams_logged = None
+    serving_unit_used = payload.serving_unit or exists.serving_unit
+    
+    if payload.custom_grams is not None:
+        grams_logged = payload.custom_grams
+    else:
+        weight = exists.serving_weight_g if exists.serving_weight_g else 100.0
+        grams_logged = payload.quantity * weight
+
     entry = FoodLog(
         user_id=payload.user_id,
         food_id=payload.food_id,
@@ -70,6 +84,8 @@ def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
         unit=payload.unit,
         portion_g_cooked=payload.portion_g_cooked,
         cooking_method=payload.cooking_method,
+        grams_logged=grams_logged,
+        serving_unit_used=serving_unit_used,
     )
     db.add(entry)
     db.flush()  # Get generated log_id
@@ -83,6 +99,8 @@ def add_food_log(payload: FoodLogIn, db: Session = Depends(get_db)):
         unit=entry.unit,
         portion_g_cooked=entry.portion_g_cooked,
         cooking_method=entry.cooking_method,
+        grams_logged=entry.grams_logged,
+        serving_unit_used=entry.serving_unit_used,
         logged_at=entry.logged_at,
     )
     
