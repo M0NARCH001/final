@@ -4,12 +4,17 @@ __pycache__/
 .venv/
 venv/
 
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
 # --- Large data folders (not for git) ---
 NutriMate Data/
 
 # --- DB / models ---
 *.db
 !backend/nutri_indian.db
+*.db.bak
 *.joblib
 *.pkl
 
@@ -26,3 +31,6 @@ build/
 *.log
 .env
 .env.*
+
+# --- Logs ---
+backend/logs/
