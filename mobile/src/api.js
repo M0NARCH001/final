@@ -13,17 +13,13 @@ const OPENFOOD_BASE = "https://world.openfoodfacts.org/api/v0/product";
 
 // Get API URL from expo-constants (works in EAS builds) or fall back to dev
 const API_BASE = (() => {
-  // UNCOMMENT this block when you want to build and deploy for production:
-  /*
   const extraUrl = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
   if (extraUrl) {
     console.log("[API] Using production URL from config:", extraUrl);
     return extraUrl;
   }
-  */
   
-  // For local development — use your laptop's Wi-Fi IP
-  // (10.0.2.2 only works inside Android emulator, NOT on real devices)
+  // Fallback for local development
   return `http://${DEV_MACHINE_IP}:${PORT}`;
 })();
 
