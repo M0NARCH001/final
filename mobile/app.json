@@ -22,7 +22,8 @@
       "predictiveBackGestureEnabled": false,
       "usesCleartextTraffic": true,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.vvirothi.nutrimate"
     },
@@ -58,9 +59,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a891d0d4-3fd6-4741-8b64-bdc47285e050"
+        "projectId": "e726fac6-491a-4b9f-a57a-c856d8de334f"
       },
       "EXPO_PUBLIC_API_URL": "https://final-production-2323.up.railway.app"
-    }
+    },
+    "owner": "venkat1202"
   }
 }
