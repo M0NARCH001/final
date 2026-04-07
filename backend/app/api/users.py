@@ -1,10 +1,13 @@
 # app/api/users.py
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.models import User
+import csv
+import io
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -174,3 +177,79 @@ def update_user(user_id: int, payload: UserIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     return UserOut.from_orm_with_str_date(user)
+
+
+# ============================================================
+# GET /users/admin/list  → All registered users (admin view)
+# ============================================================
+@router.get("/admin/list")
+def list_all_users(db: Session = Depends(get_db)):
+    """Return all registered users — for admin/capstone review purposes."""
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [
+        {
+            "user_id": u.user_id,
+            "username": u.username or "—",
+            "name": u.name or "—",
+            "gender": u.gender or "—",
+            "age": u.age,
+            "region": u.region or "All India",
+            "dietary_preference": getattr(u, "dietary_preference", "any") or "any",
+            "goal": u.goal or "—",
+            "activity_level": u.activity_level or "—",
+            "has_diabetes": bool(u.has_diabetes),
+            "has_hypertension": bool(u.has_hypertension),
+            "has_pcos": bool(u.has_pcos),
+            "muscle_gain_focus": bool(u.muscle_gain_focus),
+            "heart_health_focus": bool(u.heart_health_focus),
+            "created_at": str(u.created_at) if u.created_at else "—",
+        }
+        for u in users
+    ]
+
+
+# ============================================================
+# GET /users/admin/export.csv  → Download all users as CSV
+# ============================================================
+@router.get("/admin/export.csv")
+def export_users_csv(db: Session = Depends(get_db)):
+    """Download all registered users as a CSV file."""
+    users = db.query(User).order_by(User.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "user_id", "username", "name", "gender", "age",
+        "region", "dietary_preference", "goal", "activity_level",
+        "height_cm", "weight_kg", "target_weight_kg",
+        "has_diabetes", "has_hypertension", "has_pcos",
+        "muscle_gain_focus", "heart_health_focus", "created_at",
+    ])
+    for u in users:
+        writer.writerow([
+            u.user_id,
+            u.username or "",
+            u.name or "",
+            u.gender or "",
+            u.age or "",
+            u.region or "All India",
+            getattr(u, "dietary_preference", "any") or "any",
+            u.goal or "",
+            u.activity_level or "",
+            u.height_cm or "",
+            u.weight_kg or "",
+            u.target_weight_kg or "",
+            int(bool(u.has_diabetes)),
+            int(bool(u.has_hypertension)),
+            int(bool(u.has_pcos)),
+            int(bool(u.muscle_gain_focus)),
+            int(bool(u.heart_health_focus)),
+            str(u.created_at) if u.created_at else "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=nutrimate_users.csv"},
+    )
