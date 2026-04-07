@@ -20,6 +20,7 @@ class FoodCreate(BaseModel):
     main_name: Optional[str] = None
     subcategories_json: Optional[str] = None  # JSON string or None
     source: Optional[str] = "Imported"
+    is_vegetarian: Optional[bool] = None  # True=veg, False=non-veg, None=unknown
     Calories_kcal: Optional[float] = None
     Carbohydrates_g: Optional[float] = None
     Protein_g: Optional[float] = None
@@ -48,6 +49,7 @@ def create_food(payload: FoodCreate, db: Session = Depends(get_db)):
         main_name=payload.main_name or payload.food_name,
         subcategories_json=payload.subcategories_json,
         source=payload.source,
+        is_vegetarian=payload.is_vegetarian,
         Calories_kcal=payload.Calories_kcal,
         Carbohydrates_g=payload.Carbohydrates_g,
         Protein_g=payload.Protein_g,
@@ -93,6 +95,7 @@ def create_food_and_log(payload: FoodCreateAndLog, db: Session = Depends(get_db)
         main_name=payload.main_name or payload.food_name,
         subcategories_json=payload.subcategories_json,
         source=payload.source,
+        is_vegetarian=payload.is_vegetarian,
         Calories_kcal=payload.Calories_kcal,
         Carbohydrates_g=payload.Carbohydrates_g,
         Protein_g=payload.Protein_g,

@@ -23,6 +23,10 @@ def extract_features(impression, food):
     is_region_match = 1.0 if (user_region and food_region and user_region != 'All India' and user_region == food_region) else 0.0
     has_specific_region = 1.0 if (food_region and food_region not in ('All India', 'Generic')) else 0.0
 
+    # Feature 13: is_vegetarian of the food (1.0=veg, 0.0=non-veg, 0.5=unknown)
+    food_veg = getattr(food, 'is_vegetarian', None)
+    is_veg_food = 1.0 if food_veg is True else (0.0 if food_veg is False else 0.5)
+
     return np.array([
         d.get('Calories_kcal',      0) / 500.0,
         d.get('Protein_g',          0) / 100.0,
@@ -35,7 +39,8 @@ def extract_features(impression, food):
         getattr(impression, 'rank', 0)   /  10.0,
         (getattr(impression, 'rule_score', 0) or 0) / 100.0,
         is_region_match,
-        has_specific_region
+        has_specific_region,
+        is_veg_food,              # feature 13
     ], dtype=np.float32)
 
 
@@ -49,6 +54,18 @@ def load_model_and_scaler():
 
         MODEL  = joblib.load(MODEL_PATH)
         SCALER = joblib.load(SCALER_PATH)
+
+        # Version guard: discard models trained on a different feature count
+        expected = 13
+        actual = getattr(SCALER, 'n_features_in_', None)
+        if actual is not None and actual != expected:
+            logger.warning(
+                f"Stale model ({actual} features vs current {expected}) — "
+                "discarding; will retrain on next trigger"
+            )
+            MODEL = SCALER = None
+            return False
+
         logger.info("ML model and scaler loaded successfully")
         return True
 

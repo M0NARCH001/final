@@ -42,6 +42,9 @@ export default function SetupScreen() {
     // Phase 5: Region Selection
     const [region, setRegion] = useState("All India");
 
+    // Dietary preference
+    const [dietaryPref, setDietaryPref] = useState("any"); // "any" | "vegetarian" | "non-vegetarian"
+
     async function saveProfile() {
         try {
             if (!username || !name || !age || !height || !weight) {
@@ -145,7 +148,8 @@ export default function SetupScreen() {
                 ["user_id", activeUserId.toString()],
                 ["username", usernameClean],
                 ["region", region],
-                ["nutrimate_profile", JSON.stringify(payload)],
+                ["dietary_preference", dietaryPref],
+                ["nutrimate_profile", JSON.stringify({ ...payload, dietary_preference: dietaryPref })],
                 ["nutrimate_goals", JSON.stringify(plan)],
             ]);
 
@@ -327,6 +331,26 @@ export default function SetupScreen() {
                         </View>
                         <Text style={styles.checkLabel}>Heart Health Focus</Text>
                     </TouchableOpacity>
+
+                    <Text style={styles.h2}>Dietary Preference</Text>
+                    <Text style={styles.hint}>We'll filter recommendations to match your diet</Text>
+                    <View style={styles.row}>
+                        {[
+                            { key: "any",             label: "Any" },
+                            { key: "vegetarian",      label: "Vegetarian" },
+                            { key: "non-vegetarian",  label: "Non-Veg" },
+                        ].map(({ key, label }) => (
+                            <TouchableOpacity
+                                key={key}
+                                onPress={() => setDietaryPref(key)}
+                                style={[styles.chip, dietaryPref === key && styles.chipActive]}
+                            >
+                                <Text style={dietaryPref === key ? styles.chipTextActive : styles.chipText}>
+                                    {label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
 
                     <Text style={styles.h2}>Regional Preferences</Text>
                     <Text style={styles.hint}>This helps us recommend local dishes</Text>

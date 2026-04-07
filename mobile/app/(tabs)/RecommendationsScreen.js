@@ -53,6 +53,7 @@ export default function RecommendationsScreen() {
             const plan = JSON.parse(goals);
             const profileData = JSON.parse(profile);
             const uid = parseInt(uidStr);
+            const dietary_preference = await AsyncStorage.getItem("dietary_preference") || "any";
 
             const logs = await API.getTodayLogs(uid) || [];
 
@@ -79,6 +80,8 @@ export default function RecommendationsScreen() {
                 has_pcos: profileData.has_pcos || false,
                 muscle_gain_focus: profileData.muscle_gain_focus || false,
                 heart_health_focus: profileData.heart_health_focus || false,
+                user_region: profileData.region || "All India",
+                dietary_preference: profileData.dietary_preference || dietary_preference,
             };
 
             const recs = await API.generateRecommendations(payload);
@@ -122,11 +125,23 @@ export default function RecommendationsScreen() {
                     <View style={styles.card}>
                         <View style={styles.cardHeader}>
                             <Text style={styles.name}>{item.food_name}</Text>
-                            {item.suggested_portion_g && (
-                                <Text style={styles.portion}>
-                                    ~{item.suggested_portion_g}g
-                                </Text>
-                            )}
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                {item.is_vegetarian === true && (
+                                    <View style={styles.vegDot}>
+                                        <Text style={styles.vegDotText}>V</Text>
+                                    </View>
+                                )}
+                                {item.is_vegetarian === false && (
+                                    <View style={[styles.vegDot, styles.nonVegDot]}>
+                                        <Text style={styles.vegDotText}>N</Text>
+                                    </View>
+                                )}
+                                {item.suggested_portion_g && (
+                                    <Text style={styles.portion}>
+                                        ~{item.suggested_portion_g}g
+                                    </Text>
+                                )}
+                            </View>
                         </View>
 
                         {/* Reason for recommendation */}
@@ -279,5 +294,24 @@ const styles = StyleSheet.create({
         color: "#2E7D32",
         fontSize: 11,
         fontWeight: "700",
+    },
+    vegDot: {
+        width: 18,
+        height: 18,
+        borderRadius: 3,
+        borderWidth: 2,
+        borderColor: "#388E3C",
+        backgroundColor: "#E8F5E9",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    nonVegDot: {
+        borderColor: "#C62828",
+        backgroundColor: "#FFEBEE",
+    },
+    vegDotText: {
+        fontSize: 9,
+        fontWeight: "900",
+        color: "#333",
     },
 });

@@ -110,21 +110,44 @@ from sqlalchemy import text
 def migrate_database():
     """Add missing columns to existing tables (safe to run multiple times)"""
     results = []
-    
+
     try:
         with engine.connect() as conn:
-            # Check if username column exists in user table
-            result = conn.execute(text("PRAGMA table_info(user)")).fetchall()
-            columns = [row[1] for row in result]
-            
-            if "username" not in columns:
+            # --- user table ---
+            user_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(user)")).fetchall()]
+
+            if "username" not in user_cols:
                 conn.execute(text("ALTER TABLE user ADD COLUMN username TEXT"))
-                results.append("Added 'username' column to user table")
-            else:
-                results.append("'username' column already exists")
-            
+                results.append("Added 'username' to user")
+
+            if "dietary_preference" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN dietary_preference TEXT DEFAULT 'any'"))
+                results.append("Added 'dietary_preference' to user")
+
+            # --- food_items table ---
+            food_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(food_items)")).fetchall()]
+
+            if "is_vegetarian" not in food_cols:
+                conn.execute(text("ALTER TABLE food_items ADD COLUMN is_vegetarian BOOLEAN"))
+                results.append("Added 'is_vegetarian' to food_items")
+                # Back-fill from subcategories_json where we can determine veg status
+                conn.execute(text("""
+                    UPDATE food_items SET is_vegetarian = 0
+                    WHERE subcategories_json LIKE '%Non-Veg%'
+                       OR subcategories_json LIKE '%NonVeg%'
+                """))
+                conn.execute(text("""
+                    UPDATE food_items SET is_vegetarian = 1
+                    WHERE is_vegetarian IS NULL
+                      AND subcategories_json LIKE '%Veg%'
+                      AND subcategories_json NOT LIKE '%Non-Veg%'
+                """))
+                results.append("Back-filled is_vegetarian from subcategories_json")
+
             conn.commit()
-        
+
+        if not results:
+            results.append("All columns already present — nothing to do")
         return {"status": "success", "changes": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -165,6 +188,8 @@ class RecommendationRequest(BaseModel):
     muscle_gain_focus: bool = False
     heart_health_focus: bool = False
     user_region: str = "All India"
+    # Dietary preference: "vegetarian", "non-vegetarian", or "any"
+    dietary_preference: str = "any"
 
 # -----------------------
 # Nutrient keys
@@ -350,6 +375,8 @@ def search_foods(query: Optional[str] = Query(None), limit: int = Query(20), db:
             "region": reg_str,
             "region_id": f.region_id,
             "cuisine_type": f.cuisine_type,
+            "is_vegetarian": getattr(f, "is_vegetarian", None),
+            "source": f.source,
         })
     return results
 
@@ -840,6 +867,14 @@ def score_food(f, deficits, conditions=None):
     if any(p in food_name_lower for p in preferred):
         score += 20
 
+    # DIETARY PREFERENCE BONUS
+    dietary_pref = conditions.get("dietary_preference", "any")
+    food_is_veg = getattr(f, "is_vegetarian", None)
+    if dietary_pref == "vegetarian" and food_is_veg is True:
+        score += 12   # reward confirmed-veg foods for veg users
+    elif dietary_pref == "non-vegetarian" and food_is_veg is False:
+        score += 5    # small boost for confirmed non-veg for non-veg users
+
     # REGION BONUS
     user_region = deficits.get("user_region", "All India")
     food_region_obj = getattr(f, "region_rel", None)
@@ -875,6 +910,8 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
 
     foods = db.query(FoodItem).options(joinedload(FoodItem.region_rel)).all()
 
+    dietary_pref = conditions.get("dietary_preference", "any")
+
     # ---- basic junk filter ----
     clean = []
 
@@ -909,6 +946,11 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
         
         # For diabetes, skip very high carb items
         if (conditions.get("has_diabetes") or conditions.get("has_pcos")) and carbs > 50:
+            continue
+
+        # Dietary preference hard filter (only exclude confirmed non-veg for vegetarians)
+        food_is_veg = getattr(f, "is_vegetarian", None)
+        if dietary_pref == "vegetarian" and food_is_veg is False:
             continue
 
         clean.append(f)
@@ -952,6 +994,7 @@ def generate_recs(db, totals, targets, conditions=None, max_items=5):
             "reason": reason_str,
             "suggested_portion_g": suggested_portion_g,
             "cuisine_type": getattr(f, "cuisine_type", None),
+            "is_vegetarian": getattr(f, "is_vegetarian", None),
             # Include nutrient highlights
             "nutrients": {
                 "Calories_kcal": round(f.Calories_kcal or 0, 1),
@@ -996,6 +1039,7 @@ def recommendations_generate(req: RecommendationRequest, db: Session = Depends(g
         "muscle_gain_focus": req.muscle_gain_focus,
         "heart_health_focus": req.heart_health_focus,
         "user_region": req.user_region,
+        "dietary_preference": req.dietary_preference,
     }
 
     recs = generate_recs(db, totals, targets, conditions=conditions, max_items=5)

@@ -56,6 +56,9 @@ class User(Base):
     region_id = Column(Integer, ForeignKey("regions.id"), nullable=True)
     region_rel = relationship("Region")
 
+    # "vegetarian", "non-vegetarian", or "any" (default)
+    dietary_preference = Column(String, default="any", nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -77,6 +80,9 @@ class FoodItem(Base):
     cuisine_type = Column(String, nullable=True)
     serving_unit = Column(String, nullable=True)
     serving_weight_g = Column(Float, nullable=True)
+
+    # True = vegetarian, False = non-vegetarian, None = unknown
+    is_vegetarian = Column(Boolean, nullable=True)
 
     Calories_kcal = Column(Float, nullable=True)
     Carbohydrates_g = Column(Float, nullable=True)
