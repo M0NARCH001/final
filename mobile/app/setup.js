@@ -43,20 +43,87 @@ export default function SetupScreen() {
     const [region, setRegion] = useState("All India");
 
     // Dietary preference
-    const [dietaryPref, setDietaryPref] = useState("any"); // "any" | "vegetarian" | "non-vegetarian"
+    const [dietaryPref, setDietaryPref] = useState("any");
 
+    // Auth
+    const [password, setPassword] = useState("");
+    const [isLoginMode, setIsLoginMode] = useState(false);
+
+    // ── LOGIN FLOW ────────────────────────────────────────────────────────────
+    async function handleLogin() {
+        const usernameClean = username.trim().toLowerCase();
+        if (!usernameClean || !password) {
+            alert("Enter your username and password.");
+            return;
+        }
+        try {
+            const userData = await API.request("/auth/login", {
+                method: "POST",
+                body: { username: usernameClean, password },
+            });
+
+            // Recompute daily goals from the stored profile
+            const profilePayload = {
+                age: userData.age || 25,
+                gender: userData.gender || "Male",
+                height_cm: userData.height_cm || 170,
+                weight_kg: userData.weight_kg || 70,
+                activity_level: userData.activity_level || "Moderate",
+                goal: userData.goal || "Maintain",
+                target_weight: userData.target_weight_kg || null,
+                days: 90,
+                has_diabetes: userData.has_diabetes,
+                has_hypertension: userData.has_hypertension,
+                has_pcos: userData.has_pcos,
+                muscle_gain_focus: userData.muscle_gain_focus,
+                heart_health_focus: userData.heart_health_focus,
+                region: userData.region || "All India",
+            };
+            const plan = await API.computeGoals(profilePayload);
+            const dp = userData.dietary_preference || "any";
+
+            await AsyncStorage.multiSet([
+                ["user_id", userData.user_id.toString()],
+                ["username", userData.username],
+                ["region", userData.region || "All India"],
+                ["dietary_preference", dp],
+                ["nutrimate_profile", JSON.stringify({ ...profilePayload, dietary_preference: dp })],
+                ["nutrimate_goals", JSON.stringify(plan)],
+            ]);
+
+            router.replace("/(tabs)");
+        } catch (err) {
+            const msg = err?.message || String(err);
+            if (msg.includes("401")) {
+                alert("Incorrect username or password.");
+            } else {
+                alert("Login failed: " + msg);
+            }
+        }
+    }
+
+    // ── REGISTER / PROFILE-UPDATE FLOW ───────────────────────────────────────
     async function saveProfile() {
         try {
             if (!username || !name || !age || !height || !weight) {
-                alert("Fill all required fields (including username)");
+                alert("Fill all required fields.");
                 return;
             }
 
-            // Validate username format (alphanumeric, 3-20 chars)
             const usernameClean = username.trim().toLowerCase();
             if (!/^[a-z0-9_]{3,20}$/.test(usernameClean)) {
-                alert("Username must be 3-20 characters, letters/numbers/underscore only");
+                alert("Username: 3-20 characters, letters/numbers/underscore only.");
                 return;
+            }
+
+            const existingStoredId = await AsyncStorage.getItem("user_id");
+            const storedUsername = await AsyncStorage.getItem("username");
+            const isEditing = existingStoredId && storedUsername === usernameClean;
+
+            // Password required for new registrations only
+            if (!isEditing) {
+                if (!password) { alert("Choose a password."); return; }
+                if (password.length < 6) { alert("Password must be at least 6 characters."); return; }
             }
 
             const payload = {
@@ -69,81 +136,47 @@ export default function SetupScreen() {
                 goal,
                 target_weight: goal === "Maintain" ? null : Number(targetWeight),
                 days,
-                // Health conditions
                 has_diabetes: hasDiabetes,
                 has_hypertension: hasHypertension,
                 has_pcos: hasPcos,
                 muscle_gain_focus: muscleGainFocus,
                 heart_health_focus: heartHealthFocus,
-                region: region,
+                region,
             };
 
-            // 1. compute targets locally (via backend compute)
             const plan = await API.computeGoals(payload);
 
-            // 2. Check if username exists or register new user
             let activeUserId;
-            const existingStoredId = await AsyncStorage.getItem("user_id");
-            const storedUsername = await AsyncStorage.getItem("username");
 
-            // If we're editing AND username hasn't changed, just update
-            if (existingStoredId && storedUsername === usernameClean) {
+            if (isEditing) {
+                // Updating existing profile
                 activeUserId = existingStoredId;
-
                 try {
                     await API.request(`/users/${existingStoredId}`, {
                         method: "PUT",
                         body: {
-                            name: payload.name,
-                            age: payload.age,
-                            gender: payload.gender,
-                            height_cm: payload.height_cm,
-                            weight_kg: payload.weight_kg,
-                            activity_level: payload.activity_level,
-                            region: payload.region,
-                        }
+                            name: payload.name, age: payload.age, gender: payload.gender,
+                            height_cm: payload.height_cm, weight_kg: payload.weight_kg,
+                            activity_level: payload.activity_level, region: payload.region,
+                        },
                     });
                 } catch (err) {
-                    console.warn("Backend user update failed:", err);
+                    console.warn("Profile update failed (non-fatal):", err);
                 }
             } else {
-                // Check if username is available
-                try {
-                    const checkResult = await API.request("/users/check-username", {
-                        method: "POST",
-                        body: { username: usernameClean }
-                    });
-
-                    if (checkResult.available) {
-                        // Register new user
-                        const registerResult = await API.request("/users/register", {
-                            method: "POST",
-                            body: {
-                                username: usernameClean,
-                                name: payload.name,
-                                age: payload.age,
-                                gender: payload.gender,
-                                height_cm: payload.height_cm,
-                                weight_kg: payload.weight_kg,
-                                activity_level: payload.activity_level,
-                                region: payload.region,
-                            }
-                        });
-                        activeUserId = registerResult.user_id.toString();
-                    } else {
-                        // Username exists - use that user_id (like a login)
-                        activeUserId = checkResult.user_id.toString();
-                        alert(`Welcome back! Logged in as ${usernameClean}`);
-                    }
-                } catch (err) {
-                    console.error("Username check/register failed:", err);
-                    const errorMsg = err?.message || JSON.stringify(err);
-                    alert(`Could not verify username.\n\nError: ${errorMsg}\n\nMake sure backend is running.`);
-                    return;
-                }
+                // New registration via /auth/signup
+                const result = await API.request("/auth/signup", {
+                    method: "POST",
+                    body: {
+                        username: usernameClean,
+                        password,
+                        ...payload,
+                        dietary_preference: dietaryPref,
+                    },
+                });
+                activeUserId = result.user_id.toString();
             }
 
-            // 3. store profile, goals, username, AND the unique user_id
             await AsyncStorage.multiSet([
                 ["user_id", activeUserId.toString()],
                 ["username", usernameClean],
@@ -155,7 +188,12 @@ export default function SetupScreen() {
 
             router.replace("/(tabs)");
         } catch (e) {
-            alert(e.message || "Setup failed");
+            const msg = e?.message || String(e);
+            if (msg.includes("409")) {
+                alert("Username already taken. Pick a different one or login instead.");
+            } else {
+                alert(msg || "Setup failed");
+            }
         }
     }
 
@@ -164,18 +202,65 @@ export default function SetupScreen() {
             <SafeAreaView style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.container}>
 
-                    <Text style={styles.h1}>Setup Profile</Text>
+                    <Text style={styles.h1}>
+                        {isLoginMode ? "Welcome Back" : "Create Account"}
+                    </Text>
 
+                    {/* ── Mode toggle ── */}
+                    <View style={styles.modeRow}>
+                        <TouchableOpacity
+                            style={[styles.modeBtn, !isLoginMode && styles.modeBtnActive]}
+                            onPress={() => setIsLoginMode(false)}
+                        >
+                            <Text style={[styles.modeBtnText, !isLoginMode && styles.modeBtnTextActive]}>
+                                Register
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.modeBtn, isLoginMode && styles.modeBtnActive]}
+                            onPress={() => setIsLoginMode(true)}
+                        >
+                            <Text style={[styles.modeBtnText, isLoginMode && styles.modeBtnTextActive]}>
+                                Login
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* ── Username ── */}
                     <Text style={styles.label}>Username *</Text>
                     <TextInput
-                        placeholder="Choose a unique username"
+                        placeholder="Your username"
                         value={username}
                         onChangeText={setUsername}
                         autoCapitalize="none"
                         autoCorrect={false}
                         style={styles.input}
                     />
-                    <Text style={styles.hint}>3-20 characters, letters/numbers/underscore only</Text>
+                    {!isLoginMode && (
+                        <Text style={styles.hint}>3-20 characters, letters/numbers/underscore only</Text>
+                    )}
+
+                    {/* ── Password ── */}
+                    <Text style={styles.label}>Password *</Text>
+                    <TextInput
+                        placeholder={isLoginMode ? "Your password" : "Choose a password (min 6 chars)"}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        style={styles.input}
+                    />
+
+                    {/* ── LOGIN button — only shown in login mode ── */}
+                    {isLoginMode && (
+                        <TouchableOpacity style={styles.btn} onPress={handleLogin}>
+                            <Text style={styles.btnText}>Login</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* ── Everything below is REGISTER mode only ── */}
+                    {!isLoginMode && (
+                    <>
 
                     <Text style={styles.label}>Name *</Text>
                     <TextInput
@@ -370,8 +455,10 @@ export default function SetupScreen() {
                     </View>
 
                     <TouchableOpacity style={styles.btn} onPress={saveProfile}>
-                        <Text style={styles.btnText}>Continue</Text>
+                        <Text style={styles.btnText}>Create Account</Text>
                     </TouchableOpacity>
+
+                    </>)}
 
                 </ScrollView>
             </SafeAreaView>
@@ -387,6 +474,30 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: "700",
         marginBottom: 12,
+    },
+    modeRow: {
+        flexDirection: "row",
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: "#ddd",
+        overflow: "hidden",
+        marginBottom: 20,
+    },
+    modeBtn: {
+        flex: 1,
+        paddingVertical: 11,
+        alignItems: "center",
+        backgroundColor: "#f5f5f5",
+    },
+    modeBtnActive: {
+        backgroundColor: "#1A73E8",
+    },
+    modeBtnText: {
+        fontWeight: "600",
+        color: "#555",
+    },
+    modeBtnTextActive: {
+        color: "#fff",
     },
     input: {
         borderWidth: 1,
