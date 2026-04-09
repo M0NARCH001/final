@@ -120,6 +120,38 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE user ADD COLUMN username TEXT"))
                 results.append("Added 'username' to user")
 
+            if "password_hash" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN password_hash TEXT"))
+                results.append("Added 'password_hash' to user")
+
+            if "goal" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN goal TEXT"))
+                results.append("Added 'goal' to user")
+
+            if "has_diabetes" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN has_diabetes BOOLEAN DEFAULT 0"))
+                results.append("Added 'has_diabetes' to user")
+
+            if "has_hypertension" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN has_hypertension BOOLEAN DEFAULT 0"))
+                results.append("Added 'has_hypertension' to user")
+
+            if "has_pcos" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN has_pcos BOOLEAN DEFAULT 0"))
+                results.append("Added 'has_pcos' to user")
+
+            if "muscle_gain_focus" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN muscle_gain_focus BOOLEAN DEFAULT 0"))
+                results.append("Added 'muscle_gain_focus' to user")
+
+            if "heart_health_focus" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN heart_health_focus BOOLEAN DEFAULT 0"))
+                results.append("Added 'heart_health_focus' to user")
+
+            if "region" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN region TEXT DEFAULT 'All India'"))
+                results.append("Added 'region' to user")
+
             if "dietary_preference" not in user_cols:
                 conn.execute(text("ALTER TABLE user ADD COLUMN dietary_preference TEXT DEFAULT 'any'"))
                 results.append("Added 'dietary_preference' to user")
@@ -143,6 +175,18 @@ def migrate_database():
                       AND subcategories_json NOT LIKE '%Non-Veg%'
                 """))
                 results.append("Back-filled is_vegetarian from subcategories_json")
+
+            if "cuisine_type" not in food_cols:
+                conn.execute(text("ALTER TABLE food_items ADD COLUMN cuisine_type TEXT"))
+                results.append("Added 'cuisine_type' to food_items")
+
+            if "serving_unit" not in food_cols:
+                conn.execute(text("ALTER TABLE food_items ADD COLUMN serving_unit TEXT"))
+                results.append("Added 'serving_unit' to food_items")
+
+            if "serving_weight_g" not in food_cols:
+                conn.execute(text("ALTER TABLE food_items ADD COLUMN serving_weight_g FLOAT"))
+                results.append("Added 'serving_weight_g' to food_items")
 
             conn.commit()
 
