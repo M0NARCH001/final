@@ -53,9 +53,47 @@ class ComputeRequest(BaseModel):
 from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks
 
+def _run_startup_migrations():
+    """Run DB migrations on every startup so Railway's fresh-image DB is always up-to-date."""
+    from sqlalchemy import text as _text
+    try:
+        with engine.connect() as conn:
+            user_cols = [row[1] for row in conn.execute(_text("PRAGMA table_info(user)")).fetchall()]
+            food_cols = [row[1] for row in conn.execute(_text("PRAGMA table_info(food_items)")).fetchall()]
+
+            for col, ddl in [
+                ("password_hash",    "ALTER TABLE user ADD COLUMN password_hash TEXT"),
+                ("goal",             "ALTER TABLE user ADD COLUMN goal TEXT"),
+                ("has_diabetes",     "ALTER TABLE user ADD COLUMN has_diabetes BOOLEAN DEFAULT 0"),
+                ("has_hypertension", "ALTER TABLE user ADD COLUMN has_hypertension BOOLEAN DEFAULT 0"),
+                ("has_pcos",         "ALTER TABLE user ADD COLUMN has_pcos BOOLEAN DEFAULT 0"),
+                ("muscle_gain_focus","ALTER TABLE user ADD COLUMN muscle_gain_focus BOOLEAN DEFAULT 0"),
+                ("heart_health_focus","ALTER TABLE user ADD COLUMN heart_health_focus BOOLEAN DEFAULT 0"),
+                ("region",           "ALTER TABLE user ADD COLUMN region TEXT DEFAULT 'All India'"),
+                ("dietary_preference","ALTER TABLE user ADD COLUMN dietary_preference TEXT DEFAULT 'any'"),
+            ]:
+                if col not in user_cols:
+                    conn.execute(_text(ddl))
+
+            for col, ddl in [
+                ("is_vegetarian",  "ALTER TABLE food_items ADD COLUMN is_vegetarian BOOLEAN"),
+                ("cuisine_type",   "ALTER TABLE food_items ADD COLUMN cuisine_type TEXT"),
+                ("serving_unit",   "ALTER TABLE food_items ADD COLUMN serving_unit TEXT"),
+                ("serving_weight_g","ALTER TABLE food_items ADD COLUMN serving_weight_g FLOAT"),
+            ]:
+                if col not in food_cols:
+                    conn.execute(_text(ddl))
+
+            conn.commit()
+    except Exception as e:
+        print(f"[startup migration] warning: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load ML model if available
+    # Run DB migrations first (safe/idempotent — needed because Railway starts from image DB)
+    _run_startup_migrations()
+    # Load ML model if available
     if ML_AVAILABLE:
         load_model_and_scaler()
         ml_logger.info("NutriMate API started with ML support")
