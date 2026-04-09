@@ -1,3 +1,0 @@
-uvicorn app.api.main:app --host 0.0.0.0 --reload
-npx start expo --tunnel
-npx expo start --lan
